@@ -32,3 +32,5 @@ ts-debug.log*
 # User Reference Material (Do not commit)
 SANKEYMATICFORREFERENCEONLY/
 .kiro/
+.agent/
+
