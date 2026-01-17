@@ -1,0 +1,388 @@
+@import "tailwindcss";
+
+:root {
+  /* Brand Colors - Indigo & Slate Theme */
+  --color-primary: #4f46e5;
+  /* Indigo-600 */
+  --color-primary-hover: #4338ca;
+  /* Indigo-700 */
+  --color-secondary: #475569;
+  /* Slate-600 */
+  --color-positive: #10b981;
+  /* Emerald-500 */
+  --color-neutral: #94a3b8;
+  /* Slate-400 */
+
+  /* Surface & UI */
+  --background: #f8fafc;
+  /* Slate-50 */
+  --foreground: #0f172a;
+  /* Slate-900 */
+  --card-bg: #ffffff;
+  --panel-bg: rgba(255, 255, 255, 0.9);
+  /* Slight texture */
+  --border: #e2e8f0;
+  /* Slate-200 */
+
+  --primary-text: #1e293b;
+  /* Slate-800 */
+  --secondary-text: #64748b;
+  /* Slate-500 */
+  --hover-bg: #f1f5f9;
+  /* Slate-100 */
+
+  --grid-dot-color: #cbd5e1;
+  /* Slate-300 */
+
+  /* Glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #818cf8;
+    /* Indigo-400 */
+    --color-primary-hover: #a5b4fc;
+    /* Indigo-300 */
+    --color-secondary: #94a3b8;
+    /* Slate-400 */
+    --color-positive: #34d399;
+    /* Emerald-400 */
+    --color-neutral: #64748b;
+    /* Slate-500 */
+
+    --background: #0f172a;
+    /* Slate-900 */
+    --foreground: #f1f5f9;
+    /* Slate-100 */
+    --card-bg: #1e293b;
+    /* Slate-800 */
+    --panel-bg: rgba(30, 41, 59, 0.95);
+    --border: #334155;
+    /* Slate-700 */
+
+    --primary-text: #f1f5f9;
+    /* Slate-100 */
+    --secondary-text: #94a3b8;
+    /* Slate-400 */
+    --hover-bg: #334155;
+    /* Slate-700 */
+
+    --grid-dot-color: #475569;
+    /* Slate-600 */
+
+    /* Glassmorphism - Dark */
+    --glass-bg: rgba(30, 41, 59, 0.85);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+}
+
+body {
+  font-family: 'Manrope', system-ui, sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Headlines use primary brand color */
+h1,
+h2,
+h3 {
+  color: var(--color-primary);
+}
+
+/* ========================================
+   GLASSMORPHISM UTILITIES
+   ======================================== */
+
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: 12px;
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-header {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+
+/* ========================================
+   MICRO-ANIMATIONS & KEYFRAMES
+   ======================================== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.4s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.25s ease-out forwards;
+}
+
+/* Staggered animations for lists */
+.animate-stagger > * {
+  animation: fadeIn 0.3s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-stagger > *:nth-child(1) { animation-delay: 0.05s; }
+.animate-stagger > *:nth-child(2) { animation-delay: 0.1s; }
+.animate-stagger > *:nth-child(3) { animation-delay: 0.15s; }
+.animate-stagger > *:nth-child(4) { animation-delay: 0.2s; }
+.animate-stagger > *:nth-child(5) { animation-delay: 0.25s; }
+
+/* ========================================
+   ACCESSIBILITY - Reduced Motion
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ========================================
+   SCROLLBAR (themed)
+   ======================================== */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-neutral);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-secondary);
+}
+
+/* ========================================
+   SANKEY DIAGRAM SPECIFIC
+   ======================================== */
+
+.sankey-tooltip {
+  font-family: 'Manrope', system-ui, sans-serif;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Smooth transitions for interactive elements */
+svg path {
+  transition: stroke-opacity 0.2s ease, filter 0.2s ease;
+}
+
+svg rect {
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+/* Node hover glow effect */
+svg rect:hover {
+  filter: drop-shadow(0 0 8px var(--color-primary));
+}
+
+/* ========================================
+   FOCUS & ACCESSIBILITY
+   ======================================== */
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ========================================
+   CANVAS & GRID
+   ======================================== */
+
+.canvas-grid {
+  background-color: var(--card-bg);
+  background-image: radial-gradient(var(--grid-dot-color) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* ========================================
+   INTERACTIVE ELEMENTS
+   ======================================== */
+
+button,
+input,
+select {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+/* Enhanced hover states */
+.interactive-card {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.interactive-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* Selection highlight */
+.selected-node rect {
+  stroke: var(--color-primary);
+  stroke-width: 2px;
+  stroke-dasharray: 4, 2;
+}
+
+.selected-flow {
+  stroke-opacity: 0.8 !important;
+  stroke: var(--color-primary) !important;
+  stroke-width: 2px;
+}
+
+/* Label drag handle */
+.label-group {
+  cursor: grab;
+  transition: font-weight 0.2s;
+}
+
+.label-group:active {
+  cursor: grabbing;
+}
+
+/* ========================================
+   TOOLBAR & SIDEBAR
+   ======================================== */
+
+.toolbar-btn {
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.toolbar-btn:hover {
+  background-color: var(--hover-bg);
+  color: var(--color-primary);
+}
+
+.toolbar-btn.active {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+/* Properties panel sections */
+.properties-section {
+  border-bottom: 1px solid var(--border);
+}
+
+/* Dividers using neutral color */
+.divider {
+  background-color: var(--border);
+}
+
+/* ========================================
+   TAB NAVIGATION
+   ======================================== */
+
+.tab-button {
+  position: relative;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.tab-button::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-primary);
+  transform: scaleX(0);
+  transition: transform 0.2s ease;
+}
+
+.tab-button:hover {
+  color: var(--color-primary);
+}
+
+.tab-button.active::after {
+  transform: scaleX(1);
+}
+
+.tab-button.active {
+  color: var(--color-primary);
+}
