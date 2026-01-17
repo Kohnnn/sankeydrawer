@@ -1,0 +1,199 @@
+# Role
+You are an expert Product Manager and Senior Frontend Engineer. Your task is to implement a comprehensive overhaul of a Sankey Diagram application.
+
+We are transforming a basic diagram tool into a **Professional Financial Visualization Platform** for equity research.
+
+Below is the **Master Requirements Document**. Please implement these features, prioritizing the **Split-Pane Architecture**, **AI Financial Logic**, and **Direct State Manipulation**.
+
+
+I want to build a modern, professional Sankey diagram generator web application similar to SankeyArt: https://www.sankeyart.com/sankeys/72.
+
+Tech Stack:
+
+Check the sankeymatic.js for context and https://www.react-graph-gallery.com/sankey-diagram
+
+Frontend: React (Next.js App Router preferred for structure).
+
+Visualization: D3.js (specifically using d3-sankey for the layout logic) rendering to SVG.
+
+Styling: Tailwind CSS for a clean, minimalistic UI.
+
+State Management: React Hooks/Context for managing the diagram data.
+
+Icons: Lucide-React or Heroicons.
+
+Core Features & Layout:
+
+Split-Screen Interface:
+
+Left Panel (Data Input): A spreadsheet-like editor (you can use a library like react-data-grid or simple inputs) where users define 'Source', 'Target', and 'Value'.
+
+Right Panel (Preview): The live-updating Sankey diagram.
+
+Diagram Interactivity:
+
+Drag-and-Drop: Users must be able to drag nodes vertically to reorder them or adjust the layout. The links should update smoothly in real-time.
+
+Hover Effects: Highlighting a specific flow (link) or node when the mouse hovers over it, dimming the others.
+
+Tooltips: Show precise values when hovering over a link (e.g., 'Salary -> Savings: $5,000').
+
+Customization Options:
+
+A toolbar to change the global color palette.
+
+Option to toggle node labels (left/right/inside).
+
+Input for currency/unit prefixes and suffixes (e.g., '$', 'USD', 'kg').
+
+Export:
+
+Buttons to download the diagram as an SVG and a High-Res PNG.
+
+Design Requirements:
+
+Keep the UI very clean and 'white-labeled' (lots of whitespace, subtle borders).
+
+Use a professional sans-serif font (like Inter).
+
+Ensure the data input parses CSV format so users can paste data from Excel easily.
+
+Other must have feature for future:
+## 3. Default Palette Toggle
+**Objective:** Automatically apply a preferred palette on startup.
+*   **Actions:**
+    *   Added a "Use as Default" checkbox next to the palette dropdown.
+    *   Implemented logic to save the preference to `localStorage`.
+    *   Updated initialization to check for and load the default palette if set.
+
+## 4. Diagram Templates
+**Objective:** Save and restore visual styling configurations.
+*   **Actions:**
+    *   Created `build/templates.js` to manage template data structure (styling, canvas, labels, export).
+    *   Added "Templates" UI section with "Save", "Apply", and "Delete" controls.
+    *   Implemented `localStorage` persistence for templates.
+    *   Ensured applying a template updates settings without altering the flow data.
+
+## 5. Draggable Labels
+**Objective:** Allow manual fine-tuning of label positions.
+*   **Actions:**
+    *   Refactored label rendering in `sankeymatic.js` to use SVG groups (`<g>`) with transforms.
+    *   Added transparent `drag-handle` rects to labels for easier interaction.
+    *   Implemented `d3.drag` behavior to update positions.
+    *   Added persistence for label offsets (`labelmove` lines in the DSL).
+    *   Added a "Reset Labels" button to clear manual positioning.
+
+## 6. Label Style Panel Enhancements
+**Objective:** Modernize label typography and content control.
+*   **Actions:**
+    *   **Font Selector:** Added Google Fonts integration (Inter, Manrope, Roboto, etc.) and a dropdown selector.
+    *   **Formatting Controls:** Added "Decimal places" (0, 1, 2, All) and "Value Mode" (Absolute, Short Scale 1k/1M, Hidden).
+    *   **Comparison Line:** Added functionality to show a 3rd line with the node's percentage of the total diagram input.
+    *   Refactored the "Labels" UI panel to organize these controls logically.
+
+## 7. Data Editor Tab
+**Objective:** Provide a structured alternative to the text-based DSL.
+*   **Actions:**
+    *   Implemented a Tabbed interface ("Text Input" vs "Data Editor").
+    *   Created a dynamic HTML Table editor for Source, Target, Amount, and Comparison values.
+    *   Implemented **Two-Way Sync**:
+        *   Text -> Table parsing when opening the editor.
+        *   Table -> Text serialization (DSL generation) when editing.
+    *   Added "Export CSV" and "Import CSV" buttons.
+    *   Added row validation (visual highlighting for invalid data).
+
+AImport export mainly use editable json so AI can read and edit
+
+
+# Master Requirements Document: Financial Sankey Builder
+
+## 1. System Overview & Architecture
+The application shall use a **Split-Pane Layout**:
+* **Left Pane (70%):** The interactive Canvas/Visualization area.
+* **Right Pane (30%):** A persistent **Tabbed Sidebar** containing Data Inputs, AI Chat, and Style Settings. *Note: This replaces all previous modal popups.*
+
+**Data Model Principle:**
+* **Internal_State (JSON):** The source of truth for the application (nodes, links, positions, colors).
+* **DSL_Layer:** A text representation (e.g., "Revenue [100] Cost") used for user text input.
+* **Sync_Engine:** The mechanism that translates user input $\leftrightarrow$ JSON state in real-time.
+
+## 2. Feature Requirements
+
+### Section A: The Sidebar Interface (UI/UX)
+**User Story:** As an analyst, I need a clean, persistent workspace to manage data and styles without blocking the diagram view.
+
+1.  **Tab Structure:** The Sidebar shall have three tabs:
+    * **Tab 1: Data Editor:** A table view and DSL text area for flow inputs.
+    * **Tab 2: Appearance:** Global, Node, and Link styling controls.
+    * **Tab 3: AI Assistant:** The chat interface for intelligent manipulation.
+2.  **Appearance Tab Features:**
+    * **Node Settings:**
+        * Hex Color Input (with validation).
+        * **Recent Colors:** A swatch list of the 5 most recently used colors (persisted in localStorage).
+        * Border Opacity Slider (0-100%).
+    * **Label Settings:**
+        * **Text Margins:** Inputs for Top/Right/Bottom/Left padding (replacing fixed box dimensions).
+        * **Typography:** Controls for **Bold**, *Italic*, and Font Size.
+3.  **Accordion Behavior:** Sidebar sections shall be collapsible.
+4.  **State Persistence:** All visual settings must save to `localStorage` and restore on refresh.
+
+### Section B: AI Financial Intelligence & Control
+**User Story:** As a user, I want to use natural language to not only parse data but also directly modify the diagram's structure and appearance.
+
+1.  **Direct JSON State Manipulation (New):**
+    * **Read Access:** The AI context window must include the current `Internal_State` (JSON) so it "sees" the current diagram (node names, connections, colors).
+    * **Write Access:** The AI shall be able to output a modified JSON object (or JSON patch) to update the diagram directly.
+    * **Use Cases:**
+        * *Styling:* "Change all 'Expense' nodes to dark red."
+        * *Structure:* "Move the Net Profit node to the bottom."
+        * *Filtering:* "Hide all flows smaller than USD5mn."
+2.  **OCR & Parsing:**
+    * The AI Assistant accepts pasted images (screenshots of Income Statements) and PDF files.
+    * It must extract financial data and convert it into the DSL format (Source $\rightarrow$ Target).
+3.  **Financial Logic:**
+    * **Categorization:** Automatically detect and tag items as Revenue (Source), Cost/Expense (Red Flow), or Net Income (Green Node).
+    * **Logic Check:** If a user asks to "Balance Flows," the AI must calculate discrepancies and suggest a "Other/Unallocated" flow to make inputs = outputs.
+4.  **Precision & Units:**
+    * **Smart Units:** The AI must support converting raw numbers into financial shorthand (e.g., converting `20,000,000,000 VND` to `VND20bn`).
+    * **YoY Growth:** If comparison data is provided, the AI shall calculate Year-over-Year growth and append it to the Node Label (e.g., "Revenue (+12%)").
+5.  **Async Feedback:** When processing images/data, the UI must show a "Processing..." state.
+
+### Section C: Canvas & Toolbar (Core Functionality)
+**User Story:** As a user, I want reliable tools to manipulate the visualization manually.
+
+1.  **Toolbar Fixes:**
+    * **Undo/Redo:** Must track the `Internal_State` history (including AI-initiated JSON edits).
+    * **Export:** Options for PNG and SVG download.
+    * **Reset Functions:**
+        * "Reset View": Re-centers the camera.
+        * "Reset Session": A destructive action (with confirmation modal) that clears `localStorage`, Data, and History to start fresh.
+2.  **Node Interaction:**
+    * Clicking a node on the canvas should automatically open the **Appearance Tab** in the Sidebar and focus on that node's specific settings.
+
+### Section D: Data Visualization Standards
+**User Story:** As an analyst, the output must look professional by default.
+
+1.  **Semantic Coloring:**
+    * Default positive flows (Profits, Assets) = Green.
+    * Default negative flows (Expenses, Liabilities) = Red.
+    * Neutral flows = Grey.
+2.  **Validation:**
+    * The system shall display a status indicator: "Balanced" (Green Check) or "Imbalanced" (Warning Icon).
+    * If imbalanced, hovering the warning shows which nodes have unequal Input/Output.
+
+---
+
+## Technical Implementation Notes for the AI Developer
+* **AI Loop:** Implement a strict **Read-Eval-Print Loop (REPL)** for the AI:
+    1.  **Inject:** Current JSON state into system prompt.
+    2.  **Prompt:** User request (e.g., "Make it red").
+    3.  **Generate:** AI outputs new JSON or Patch.
+    4.  **Validate:** System checks if JSON is valid Sankey data.
+    5.  **Render:** Update State $\rightarrow$ Re-render Canvas.
+* **CSS Framework:** Use a utility class approach (e.g., Tailwind) for the Sidebar to ensure distinct split-pane sizing.
+* **State Management:** Ensure that changes in the **Sidebar (Tab 1)** immediately reflect on the **Canvas**, and dragging nodes on the **Canvas** updates the coordinate data in the **State**.
+
+Please start by setting up the project structure and creating the basic SankeyChart component using D3 that accepts a data prop.
+
+---
+
