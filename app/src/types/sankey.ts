@@ -154,28 +154,28 @@ export interface DiagramSettings {
   nodeBorderOpacity: number;
   nodeBorderRadius: number; // New: 0-20px
 
-    // Links
-    linkCurvature: number;
-    linkCurveStyle: 'geometric' | 'organic' | 'sharp'; // New
-    linkOpacity: number;
-    linkGradient: boolean;
-    linkGradientType: 'source-to-target' | 'target-to-source' | 'both-ends'; // New
-    linkBlendMode: 'normal' | 'multiply' | 'screen' | 'overlay'; // New
-    showParticles: boolean; // New
-    particleSpeed: number; // New: 0.1 - 2.0
-    useFinancialTheme: boolean; // New: Auto-color flows by category
+  // Links
+  linkCurvature: number;
+  linkCurveStyle: 'geometric' | 'organic' | 'sharp'; // New
+  linkOpacity: number;
+  linkGradient: boolean;
+  linkGradientType: 'source-to-target' | 'target-to-source' | 'both-ends'; // New
+  linkBlendMode: 'normal' | 'multiply' | 'screen' | 'overlay'; // New
+  showParticles: boolean; // New
+  particleSpeed: number; // New: 0.1 - 2.0
+  useFinancialTheme: boolean; // New: Auto-color flows by category
 
-    // Labels
-    labelPosition: 'left' | 'right' | 'inside' | 'external'; // Added 'external'
-    showLeaderLines: boolean; // New
-    leaderLineColor: string; // New
-    leaderLineWidth: number; // New
-    labelFontFamily: string;
-    labelFontSize: number;
-    labelBold: boolean;
-    labelItalic: boolean;
-    labelMargin: { top: number; right: number; bottom: number; left: number };
-    showComparisonLine: boolean;
+  // Labels
+  labelPosition: 'left' | 'right' | 'inside' | 'external'; // Added 'external'
+  showLeaderLines: boolean; // New
+  leaderLineColor: string; // New
+  leaderLineWidth: number; // New
+  labelFontFamily: string;
+  labelFontSize: number;
+  labelBold: boolean;
+  labelItalic: boolean;
+  labelMargin: { top: number; right: number; bottom: number; left: number };
+  showComparisonLine: boolean;
 
   // Value formatting
   valuePrefix: string;
@@ -189,15 +189,15 @@ export interface DiagramSettings {
   isDarkMode: boolean; // Note: UI toggle removed, permanently light mode
   showGrid: boolean;
   snapToGrid: boolean;
-    gridSize: number;
-    enableFocusMode: boolean; // New: Toggle dimming on selection
-    showMiniMap: boolean; // New
-    showLegend: boolean; // New
-    legendPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'; // New
-    logoUrl?: string; // New
-    logoPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'; // New
-    logoSize: number; // New
-    logoOpacity: number; // New
+  gridSize: number;
+  enableFocusMode: boolean; // New: Toggle dimming on selection
+  showMiniMap: boolean; // New
+  showLegend: boolean; // New
+  legendPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'; // New
+  logoUrl?: string; // New
+  logoPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'; // New
+  logoSize: number; // New
+  logoOpacity: number; // New
 }
 
 export interface CustomLayout {
@@ -228,7 +228,7 @@ export interface HistoryState {
 export const defaultSettings: DiagramSettings = {
   width: 1000,
   height: 600,
-  padding: { top: 40, right: 120, bottom: 40, left: 120 }, // Generous padding
+  padding: { top: 60, right: 180, bottom: 60, left: 180 }, // Extra padding for external labels
   nodeWidth: 12,
   nodePadding: 24,
   nodeOpacity: 1,
@@ -236,19 +236,19 @@ export const defaultSettings: DiagramSettings = {
   nodeBorderRadius: 0, // Thinner nodes like SankeyArt
   linkCurvature: 0.7,
   linkCurveStyle: 'organic',
-  linkOpacity: 0.55,
+  linkOpacity: 0.40,  // 40% like SankeyArt - allows overlaps to blend
 
-    linkGradient: true, // Professional gradient by default
-    linkGradientType: 'source-to-target',
-    linkBlendMode: 'normal',
-    showParticles: false,
-    particleSpeed: 1.0,
-    useFinancialTheme: false, // Auto-color by category
-    labelPosition: 'external', // Standard external labels per professional overhaul
-    showLeaderLines: true,
-    leaderLineColor: '#9ca3af',
-    leaderLineWidth: 1,
-    labelFontFamily: 'Manrope',
+  linkGradient: true, // Professional gradient by default
+  linkGradientType: 'source-to-target',
+  linkBlendMode: 'normal',
+  showParticles: false,
+  particleSpeed: 1.0,
+  useFinancialTheme: false, // Auto-color by category
+  labelPosition: 'external', // Standard external labels per professional overhaul
+  showLeaderLines: true,
+  leaderLineColor: '#9ca3af',
+  leaderLineWidth: 1,
+  labelFontFamily: 'Inter, sans-serif',  // Professional UI font like SankeyArt
   labelFontSize: 14,
   labelBold: true,
   labelItalic: false,
@@ -262,15 +262,15 @@ export const defaultSettings: DiagramSettings = {
   useDefaultPalette: true,
   isDarkMode: false, // Permanently false per professional overhaul
   showGrid: false,
-  snapToGrid: true,
-    gridSize: 20,
-    enableFocusMode: true,
-    showMiniMap: false,
-    showLegend: false,
-    legendPosition: 'top-right',
-    logoPosition: 'bottom-right',
-    logoSize: 80,
-    logoOpacity: 0.8,
+  snapToGrid: false,  // Free movement by default (SankeyArt style)
+  gridSize: 20,
+  enableFocusMode: true,
+  showMiniMap: false,
+  showLegend: false,
+  legendPosition: 'top-right',
+  logoPosition: 'bottom-right',
+  logoSize: 80,
+  logoOpacity: 0.8,
 };
 
 // Sample data for initial render

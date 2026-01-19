@@ -127,6 +127,12 @@ export default function SankeyCanvas() {
             // Init Zoom
             const zoom = d3.zoom<SVGSVGElement, unknown>()
                 .scaleExtent([0.1, 5])
+                .filter((event) => {
+                    // Don't trigger zoom/pan when dragging nodes
+                    const target = event.target as Element;
+                    if (target.closest('.sankey-node')) return false;
+                    return !event.ctrlKey && !event.button;
+                })
                 .on('zoom', (event) => {
                     mainGroup.attr('transform', event.transform);
                 });
@@ -765,6 +771,7 @@ export default function SankeyCanvas() {
         // Drag
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const drag = d3.drag<any, any>()
+            .filter((e) => !e.ctrlKey && !e.button) // Only left-click, no Ctrl
             .subject((e, d) => ({ x: d.x0, y: d.y0 }))
             .on('start', function (e, d) {
                 d3.select(this).raise().attr('cursor', 'grabbing');
@@ -877,7 +884,11 @@ export default function SankeyCanvas() {
             })
             .on('end', function (e, d) {
                 guideLayer.selectAll('*').remove();
-                d3.select(this).attr('cursor', 'pointer');
+                d3.select(this)
+                    .attr('cursor', 'pointer')
+                    .transition()
+                    .duration(100)
+                    .ease(d3.easeQuadOut);  // Smooth settle
                 const dist = Math.hypot(e.x - (d as any)._dragStartX, e.y - (d as any)._dragStartY);
                 if (dist < 3 && (Date.now() - (d as any)._dragStartTime < 500)) {
                     // Click
@@ -887,7 +898,8 @@ export default function SankeyCanvas() {
                 }
             });
 
-        nodeEnter.call(drag)
+        // Apply drag to ALL nodes (enter + update), not just new ones
+        nodeUpdate.call(drag)
             .on('dblclick', function (e, d: any) {
                 e.stopPropagation();
                 setEditingNodeId(d.id);
