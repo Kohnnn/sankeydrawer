@@ -89,7 +89,25 @@ export default function Toolbar() {
         { label: 'Annotate', icon: SquareDashed, onClick: () => setTool('annotate') },
     ];
 
+    const fileMenuItems = [
+        { label: 'Export PNG (Standard)', icon: Image, onClick: () => handleExportPNG(1) },
+        { label: 'Export PNG (High-Res 3x)', icon: Image, onClick: () => handleExportPNG(3) },
+        { label: 'Export SVG Vector', icon: FileCode, onClick: handleExportSVG },
+        { label: 'Export JSON Data', icon: FileJson, onClick: handleExportJSON },
+        { label: 'Factory Reset', icon: Trash2, onClick: resetSession, danger: true },
+    ];
+
+    const viewMenuItems = [
+        { label: 'Zoom In', icon: ZoomIn, onClick: zoomIn },
+        { label: 'Zoom Out', icon: ZoomOut, onClick: zoomOut },
+        { label: 'Reset Viewport', icon: Maximize2, onClick: zoomReset },
+        { label: 'Toggle Grid', icon: RefreshCw, onClick: () => studioDispatch({ type: 'TOGGLE_GRID' }) },
+        { label: 'Reset Node Positions', icon: RotateCw, onClick: resetNodePositions },
+        { label: 'Reset Label Positions', icon: RotateCw, onClick: resetLabelPositions },
+    ];
+
     const CurrentToolIcon = toolMenuItems.find(t => t.label.toLowerCase().replace(' ', '') === studioState.currentTool.toLowerCase())?.icon || MousePointer2;
+
 
     return (
         <div className="w-full bg-white border-b border-slate-200 px-4 py-1 flex items-center justify-between z-30 shrink-0">
