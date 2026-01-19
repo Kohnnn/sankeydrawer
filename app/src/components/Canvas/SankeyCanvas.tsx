@@ -443,7 +443,9 @@ export default function SankeyCanvas() {
                 .attr('y2', (d: any) => d.y2)
                 .attr('stroke', settings.leaderLineColor || '#9ca3af')
                 .attr('stroke-width', settings.leaderLineWidth || 1)
-                .attr('opacity', 0.6);
+                .attr('stroke-dasharray', '2 2')  // Dashed for professional look
+                .attr('opacity', 0.6)
+                .attr('stroke-linecap', 'round');
         }
 
         // --- Tooltip ---
@@ -746,8 +748,11 @@ export default function SankeyCanvas() {
             .attr('opacity', 0)
             .attr('transform', (d: any) => `translate(${d.x0},${d.y0})`); // Start at correct pos
 
-        nodeEnter.append('rect').attr('rx', settings.nodeBorderRadius ?? 0).attr('ry', settings.nodeBorderRadius ?? 0);
-        // Gloss effect removed for professional look
+        // FORCE sharp corners - SankeyArt style (always 0, no fallback)
+        nodeEnter.append('rect')
+            .attr('rx', 0)
+            .attr('ry', 0)
+            .attr('class', 'node-rect');
 
 
         const nodeUpdate = nodeEnter.merge(nodeSel as any);
@@ -761,11 +766,13 @@ export default function SankeyCanvas() {
             .attr('opacity', (d: any) => isDimmed(d.id) ? 0.1 : 1);
 
         nodeUpdate.select('rect')
-            .transition('layout').duration(750).ease(d3.easeCubicInOut) // Animate Size
-            .attr('rx', settings.nodeBorderRadius ?? 0).attr('ry', settings.nodeBorderRadius ?? 0)
+            .transition('layout').duration(750).ease(d3.easeCubicInOut)
+            .attr('rx', 0)  // FORCE sharp - SankeyArt style
+            .attr('ry', 0)
             .attr('width', (d: any) => d.x1 - d.x0)
             .attr('height', (d: any) => d.y1 - d.y0)
-            .attr('fill', (d: any, i) => getNodeColor(d, i)); // Color can be in style but usually stays const
+            .attr('fill', (d: any, i) => getNodeColor(d, i))
+            .style('filter', 'none');  // Remove any shadow filter
 
 
         // Drag

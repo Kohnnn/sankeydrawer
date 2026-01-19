@@ -392,3 +392,43 @@ svg text {
 .tab-button.active {
   color: var(--color-primary);
 }
+/* ========================================
+   PHASE 02: SHARP NODE STYLING
+   ======================================== */
+
+/* Force sharp corners on all nodes */
+.sankey-node rect,
+.node-rect {
+  rx: 0 !important;
+  ry: 0 !important;
+  border-radius: 0 !important;
+}
+
+/* Subtle stroke on hover instead of glow */
+svg rect.node-rect:hover {
+  stroke: var(--color-primary);
+  stroke-width: 2px;
+  stroke-opacity: 0.8;
+}
+
+/* ========================================
+   PHASE 03: EXTERNAL LABEL STYLING
+   ======================================== */
+
+.sankey-label {
+  pointer-events: none;
+}
+
+.node-name {
+  font-weight: 600;
+  fill: #1e293b;
+}
+
+.node-value {
+  font-weight: 400;
+  fill: #64748b;
+}
+
+.leader-line {
+  stroke-linecap: round;
+}
