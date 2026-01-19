@@ -7,6 +7,7 @@ import { useDiagram } from '@/context/DiagramContext';
 import { useStudio } from '@/context/StudioContext';
 import { SankeyNode, NodeCustomization, IndependentLabel } from '@/types/sankey';
 import NodeEditPopover from './NodeEditPopover';
+import MiniMap from './MiniMap';
 import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Undo, Redo, Download, Image as ImageIcon } from 'lucide-react';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
@@ -33,12 +34,24 @@ export default function SankeyCanvas() {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const { state, dispatch } = useDiagram();
-    const { state: studioState, setTool } = useStudio();
-    const { data, settings, selectedNodeId, selectedLinkIndex, nodeCustomizations, independentLabels } = state;
+    const { state: studioState, dispatch: studioDispatch, setTool } = useStudio();
+    const { data, settings, selectedNodeId, selectedLinkIndex, nodeCustomizations, independentLabels, annotationBoxes } = state;
     const [popover, setPopover] = useState<PopoverState | null>(null);
 
+    // In-place editing state
+    const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+    const [editText, setEditText] = useState('');
+
+    // Annotation drawing state
+    const [drawingBox, setDrawingBox] = useState<{
+        startX: number;
+        startY: number;
+        currentX: number;
+        currentY: number;
+    } | null>(null);
+
     // Keyboard shortcuts
-    useKeyboardShortcuts({ svgRef, dispatch, state, selectedNodeId });
+    useKeyboardShortcuts({ svgRef, dispatch, studioDispatch, state, selectedNodeId });
 
     // Get customization for a node
     const getCustomization = useCallback((nodeId: string): NodeCustomization | undefined => {
@@ -160,8 +173,9 @@ export default function SankeyCanvas() {
                 .attr('height', gridSize)
                 .attr('patternUnits', 'userSpaceOnUse');
             pattern.append('circle')
-                .attr('cx', 1).attr('cy', 1).attr('r', 1)
-                .attr('fill', settings.isDarkMode ? '#334155' : '#e5e7eb');
+                .attr('cx', 1).attr('cy', 1).attr('r', 0.8)
+                .attr('fill', settings.isDarkMode ? '#1e293b' : '#e5e7eb')
+                .attr('opacity', settings.isDarkMode ? 0.4 : 1);
         }
 
         // --- Update Grid Background ---
@@ -260,6 +274,169 @@ export default function SankeyCanvas() {
         const nodeLayer = getLayer('layer-nodes');
         const labelLayer = getLayer('layer-labels');
         const guideLayer = getLayer('layer-guides');
+        const leaderLayer = getLayer('layer-leaders');
+        const annotationLayer = getLayer('layer-annotations');
+        const logoLayer = getLayer('layer-logo');
+        const legendLayer = getLayer('layer-legend');
+
+        // --- Logo Overlay ---
+        logoLayer.selectAll('*').remove();
+        if (settings.logoUrl) {
+            const size = settings.logoSize || 80;
+            const pos = settings.logoPosition || 'bottom-right';
+            let x = 20, y = 20;
+            if (pos.includes('right')) x = width - size - 20;
+            if (pos.includes('bottom')) y = height - size - 20;
+
+            logoLayer.append('image')
+                .attr('href', settings.logoUrl)
+                .attr('x', x)
+                .attr('y', y)
+                .attr('width', size)
+                .attr('height', size)
+                .attr('opacity', settings.logoOpacity || 0.8)
+                .attr('preserveAspectRatio', 'xMidYMid meet');
+        }
+
+        // --- Legend ---
+        legendLayer.selectAll('*').remove();
+        if (settings.showLegend) {
+            const legendItems = Array.from(new Set(
+                data.nodes.map(n => n.category || 'neutral')
+            )).map(cat => ({
+                label: cat.charAt(0).toUpperCase() + cat.slice(1),
+                color: COLORS[cat] || '#6b7280'
+            }));
+
+            const pos = settings.legendPosition || 'top-right';
+            const itemHeight = 24;
+            const legendWidth = 120;
+            const legendHeight = legendItems.length * itemHeight + 16;
+
+            let startX = pos.includes('right') ? width - legendWidth - 20 : 20;
+            let startY = pos.includes('bottom') ? height - legendHeight - 20 : 20;
+
+            const legendG = legendLayer.append('g')
+                .attr('transform', `translate(${startX}, ${startY})`);
+
+            legendG.append('rect')
+                .attr('width', legendWidth)
+                .attr('height', legendHeight)
+                .attr('fill', settings.isDarkMode ? 'rgba(15, 23, 42, 0.8)' : 'rgba(255, 255, 255, 0.8)')
+                .attr('stroke', settings.isDarkMode ? '#334155' : '#e2e8f0')
+                .attr('rx', 6);
+
+            legendItems.forEach((item, i) => {
+                const itemG = legendG.append('g')
+                    .attr('transform', `translate(12, ${i * itemHeight + 16})`);
+
+                itemG.append('rect')
+                    .attr('width', 12)
+                    .attr('height', 12)
+                    .attr('fill', item.color)
+                    .attr('rx', 2);
+
+                itemG.append('text')
+                    .attr('x', 20)
+                    .attr('y', 10)
+                    .attr('font-size', 10)
+                    .attr('font-weight', '600')
+                    .attr('fill', settings.isDarkMode ? '#e5e7eb' : '#374151')
+                    .text(item.label);
+            });
+        }
+
+        // --- Annotation Boxes ---
+        annotationLayer.lower(); // Keep behind nodes
+        const annotationSel = annotationLayer.selectAll('.annotation-box')
+            .data(state.annotationBoxes || [], (d: any) => d.id);
+
+        annotationSel.exit().remove();
+
+        const annotationEnter = annotationSel.enter()
+            .append('g')
+            .attr('class', 'annotation-box cursor-pointer');
+
+        annotationEnter.append('rect')
+            .attr('rx', 4).attr('ry', 4)
+            .on('click', (e, d: any) => {
+                e.stopPropagation();
+                if (window.confirm('Delete annotation box?')) {
+                    dispatch({ type: 'DELETE_ANNOTATION_BOX', payload: d.id });
+                }
+            })
+            .merge(annotationSel.select('rect') as any)
+            .attr('x', (d: any) => d.x)
+            .attr('y', (d: any) => d.y)
+            .attr('width', (d: any) => d.width)
+            .attr('height', (d: any) => d.height)
+            .attr('fill', (d: any) => d.backgroundColor || 'transparent')
+            .attr('fill-opacity', (d: any) => d.backgroundOpacity || 0)
+            .attr('stroke', (d: any) => d.borderColor || '#dc2626')
+            .attr('stroke-width', (d: any) => d.borderWidth || 2)
+            .attr('stroke-dasharray', (d: any) =>
+                d.borderStyle === 'dashed' ? '8 4' :
+                    d.borderStyle === 'dotted' ? '2 2' : 'none'
+            );
+
+        // Add labels for annotation boxes
+        annotationEnter.append('text')
+            .attr('class', 'box-label')
+            .style('pointer-events', 'none')
+            .merge(annotationSel.select('text.box-label') as any)
+            .attr('x', (d: any) => d.x + 8)
+            .attr('y', (d: any) => d.y - 8)
+            .attr('font-size', 10)
+            .attr('font-weight', 'bold')
+            .attr('fill', (d: any) => d.borderColor || '#dc2626')
+            .text((d: any) => d.label || '');
+
+        // Drawing Preview
+        annotationLayer.select('.drawing-preview').remove();
+        if (drawingBox) {
+            annotationLayer.append('rect')
+                .attr('class', 'drawing-preview')
+                .attr('x', Math.min(drawingBox.startX, drawingBox.currentX))
+                .attr('y', Math.min(drawingBox.startY, drawingBox.currentY))
+                .attr('width', Math.abs(drawingBox.currentX - drawingBox.startX))
+                .attr('height', Math.abs(drawingBox.currentY - drawingBox.startY))
+                .attr('fill', 'rgba(59, 130, 246, 0.1)')
+                .attr('stroke', '#3b82f6')
+                .attr('stroke-width', 2)
+                .attr('stroke-dasharray', '4 2')
+                .attr('rx', 4);
+        }
+
+        // --- Leader Lines for External Labels ---
+        leaderLayer.selectAll('*').remove();
+        if (settings.labelPosition === 'external' && settings.showLeaderLines) {
+            const leaderData = nodes.map((d: any) => {
+                const isLeft = d.x0 < width / 2;
+                const midY = (d.y0 + d.y1) / 2;
+                return {
+                    id: d.id,
+                    x1: isLeft ? d.x0 - 4 : d.x1 + 4,
+                    x2: isLeft ? d.x0 - 30 : d.x1 + 30,
+                    y1: midY,
+                    y2: midY,
+                };
+            });
+
+            const leaderSel = leaderLayer.selectAll('.leader-line')
+                .data(leaderData, (d: any) => d.id);
+
+            leaderSel.enter()
+                .append('line')
+                .attr('class', 'leader-line')
+                .merge(leaderSel as any)
+                .attr('x1', (d: any) => d.x1)
+                .attr('x2', (d: any) => d.x2)
+                .attr('y1', (d: any) => d.y1)
+                .attr('y2', (d: any) => d.y2)
+                .attr('stroke', settings.leaderLineColor || '#9ca3af')
+                .attr('stroke-width', settings.leaderLineWidth || 1)
+                .attr('opacity', 0.6);
+        }
 
         // --- Tooltip ---
         let tooltip = d3.select('body').select<HTMLDivElement>('.sankey-tooltip');
@@ -282,18 +459,48 @@ export default function SankeyCanvas() {
         // --- Links ---
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const smoothLinkPath = (d: any) => {
+            const curveStyle = settings.linkCurveStyle || 'organic';
             let curvature = settings.linkCurvature ?? 0.5;
+
+            const sx = d.source.x1;
+            const tx = d.target.x0;
+            const sy0 = d.y0;
+            const ty1 = d.y1;
+            const w = d.width / 2;
+
+            if (curveStyle === 'sharp') {
+                // Right angles
+                const mx = (sx + tx) / 2;
+                return `M ${sx},${sy0 - w} L ${mx},${sy0 - w} L ${mx},${ty1 - w} L ${tx},${ty1 - w} L ${tx},${ty1 + w} L ${mx},${ty1 + w} L ${mx},${sy0 + w} L ${sx},${sy0 + w} Z`;
+            }
+
+            if (curveStyle === 'organic') {
+                // SankeyArt-style S-curves with easing
+                const dx = tx - sx;
+                const dy = ty1 - sy0;
+
+                const tension = 0.4 + (curvature * 0.3);
+                const cpx1 = sx + dx * tension;
+                const cpx2 = tx - dx * tension;
+
+                const cpyOffset = Math.min(Math.abs(dy) * 0.1, 20);
+                const cpy1 = sy0 + (dy > 0 ? cpyOffset : -cpyOffset);
+                const cpy2 = ty1 - (dy > 0 ? cpyOffset : -cpyOffset);
+
+                return `M ${sx},${sy0 - w} C ${cpx1},${cpy1 - w} ${cpx2},${cpy2 - w} ${tx},${ty1 - w} L ${tx},${ty1 + w} C ${cpx2},${cpy2 + w} ${cpx1},${cpy1 + w} ${sx},${sy0 + w} Z`;
+            }
+
+            // Default: geometric
             curvature = Math.min(0.5, curvature);
-            const dx = Math.max(1, d.target.x0 - d.source.x1);
-            const dy = d.y1 - d.y0;
+            const dx = Math.max(1, tx - sx);
+            const dy = ty1 - sy0;
             const ratio = dx / (Math.abs(dy) + 0.1);
             if (ratio < 1) curvature = 0.5 - (0.5 - curvature) * Math.sqrt(ratio);
 
-            const xi = d3.interpolateNumber(d.source.x1, d.target.x0);
+            const xi = d3.interpolateNumber(sx, tx);
             const x2 = xi(curvature), x3 = xi(1 - curvature);
-            const y0 = d.y0, y1 = d.y1, w = d.width / 2;
 
-            return `M ${d.source.x1},${y0 - w} C ${x2},${y0 - w} ${x3},${y1 - w} ${d.target.x0},${y1 - w} L ${d.target.x0},${y1 + w} C ${x3},${y1 + w} ${x2},${y0 + w} ${d.source.x1},${y0 + w} Z`
+            return `M ${sx},${sy0 - w} C ${x2},${sy0 - w} ${x3},${ty1 - w} ${tx},${ty1 - w} L ${tx},${ty1 + w} C ${x3},${ty1 + w} ${x2},${sy0 + w} ${sx},${sy0 + w} Z`
                 .replace(/\s+/g, ' ').trim();
         };
 
@@ -305,11 +512,24 @@ export default function SankeyCanvas() {
             if (g.empty()) {
                 g = defs.append('linearGradient').attr('id', id).attr('gradientUnits', 'userSpaceOnUse');
                 g.append('stop').attr('offset', '0%').attr('class', 's');
+                g.append('stop').attr('offset', '50%').attr('class', 'm'); // Mid point
                 g.append('stop').attr('offset', '100%').attr('class', 't');
             }
             g.attr('x1', l.source.x1).attr('x2', l.target.x0);
-            g.select('.s').attr('stop-color', l.source.flowColor || getNodeColor(l.source, 0));
-            g.select('.t').attr('stop-color', getNodeColor(l.target, 0));
+
+            const sourceColor = l.source.flowColor || getNodeColor(l.source, 0);
+            const targetColor = getNodeColor(l.target, 0);
+            const gradType = settings.linkGradientType || 'source-to-target';
+
+            if (gradType === 'both-ends') {
+                g.select('.s').attr('stop-color', sourceColor).attr('stop-opacity', 1);
+                g.select('.m').attr('stop-color', d3.interpolateRgb(sourceColor, targetColor)(0.5)).attr('stop-opacity', 0.6);
+                g.select('.t').attr('stop-color', targetColor).attr('stop-opacity', 1);
+            } else {
+                g.select('.s').attr('stop-color', sourceColor).attr('stop-opacity', 1);
+                g.select('.m').attr('stop-color', d3.interpolateRgb(sourceColor, targetColor)(0.5)).attr('stop-opacity', 1);
+                g.select('.t').attr('stop-color', targetColor).attr('stop-opacity', 1);
+            }
         });
 
         // Focus Mode Logic (Path Tracing)
@@ -668,7 +888,13 @@ export default function SankeyCanvas() {
                 }
             });
 
-        nodeEnter.call(drag);
+        nodeEnter.call(drag)
+            .on('dblclick', function (e, d: any) {
+                e.stopPropagation();
+                setEditingNodeId(d.id);
+                setEditText(d.name);
+                // The input will be focused via useEffect when editingNodeId changes
+            });
 
 
         // --- Labels ---
@@ -701,8 +927,10 @@ export default function SankeyCanvas() {
                 let x = 0;
                 let y = (d.y0 + d.y1) / 2;
 
-                // Inside Positioning (e.g., Nvidia style)
-                if (pos === 'inside') {
+                if (pos === 'external') {
+                    const isLeft = d.x0 < width / 2;
+                    x = isLeft ? d.x0 - 40 : d.x1 + 40;
+                } else if (pos === 'inside') {
                     x = d.x0 + nodeWidth / 2;
                 } else if (pos === 'right') {
                     // Standard Right
@@ -713,7 +941,7 @@ export default function SankeyCanvas() {
                 }
 
                 // Override if near edges
-                if (pos !== 'inside') {
+                if (pos !== 'inside' && pos !== 'external') {
                     if (d.x0 < width / 2) {
                         x = d.x1 + 6; // Force right for left-side nodes usually
                     } else {
@@ -867,6 +1095,43 @@ export default function SankeyCanvas() {
 
 
         // --- Canvas Interactions (Add Items) ---
+        svg.on('mousedown', (event) => {
+            if (studioState.currentTool !== 'annotate') return;
+            const [x, y] = d3.pointer(event, mainGroup.node());
+            setDrawingBox({ startX: x, startY: y, currentX: x, currentY: y });
+        });
+
+        svg.on('mousemove', (event) => {
+            if (!drawingBox) return;
+            const [x, y] = d3.pointer(event, mainGroup.node());
+            setDrawingBox(prev => prev ? { ...prev, currentX: x, currentY: y } : null);
+        });
+
+        svg.on('mouseup', (event) => {
+            if (!drawingBox) return;
+            const x = Math.min(drawingBox.startX, drawingBox.currentX);
+            const y = Math.min(drawingBox.startY, drawingBox.currentY);
+            const width = Math.abs(drawingBox.currentX - drawingBox.startX);
+            const height = Math.abs(drawingBox.currentY - drawingBox.startY);
+
+            if (width > 5 && height > 5) {
+                const label = window.prompt('Label for this box? (Optional)', '');
+                dispatch({
+                    type: 'ADD_ANNOTATION_BOX',
+                    payload: {
+                        id: `box-${Date.now()}`,
+                        x, y, width, height,
+                        label: label || undefined,
+                        borderColor: '#dc2626',
+                        borderWidth: 2,
+                        borderStyle: 'dashed'
+                    }
+                });
+            }
+            setDrawingBox(null);
+            setTool('select');
+        });
+
         svg.on('click', (event) => {
             // Ignore if handled by children
             if (event.defaultPrevented) return;
@@ -912,7 +1177,7 @@ export default function SankeyCanvas() {
                 width="100%"
                 height="100%"
                 viewBox={`0 0 ${settings.width} ${settings.height}`}
-                className="w-full h-full"
+                className="w-full h-full main-canvas"
                 style={{ minHeight: '600px' }}
             />
             {/* Controls */}
@@ -972,6 +1237,42 @@ export default function SankeyCanvas() {
                         window.dispatchEvent(event);
                     }}
                 />
+            )}
+
+            {settings.showMiniMap && <MiniMap />}
+
+            {editingNodeId && (
+                <div
+                    className="absolute z-50 pointer-events-none"
+                    style={{
+                        left: (data.nodes.find(n => n.id === editingNodeId)?.x0 ?? 0) + 'px',
+                        top: (data.nodes.find(n => n.id === editingNodeId)?.y0 ?? 0) + 'px',
+                    }}
+                >
+                    <input
+                        autoFocus
+                        className="pointer-events-auto px-2 py-1 bg-white border-2 border-blue-500 rounded shadow-lg outline-none text-sm font-medium min-w-[120px]"
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        onBlur={() => {
+                            if (editText.trim()) {
+                                dispatch({ type: 'UPDATE_NODE', payload: { id: editingNodeId, updates: { name: editText } } });
+                            }
+                            setEditingNodeId(null);
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                if (editText.trim()) {
+                                    dispatch({ type: 'UPDATE_NODE', payload: { id: editingNodeId, updates: { name: editText } } });
+                                }
+                                setEditingNodeId(null);
+                            }
+                            if (e.key === 'Escape') {
+                                setEditingNodeId(null);
+                            }
+                        }}
+                    />
+                </div>
             )}
         </div>
     );

@@ -74,6 +74,21 @@ export interface IndependentLabel {
   align?: 'left' | 'center' | 'right';
 }
 
+export interface AnnotationBox {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label?: string;
+  labelPosition?: 'top' | 'bottom' | 'inside';
+  borderColor: string;
+  borderWidth: number;
+  borderStyle: 'dashed' | 'solid' | 'dotted';
+  backgroundColor?: string;
+  backgroundOpacity?: number;
+}
+
 export interface SankeyData {
   nodes: SankeyNode[];
   links: SankeyLink[];
@@ -139,23 +154,28 @@ export interface DiagramSettings {
   nodeBorderOpacity: number;
   nodeBorderRadius: number; // New: 0-20px
 
-  // Links
-  linkCurvature: number;
-  linkOpacity: number;
-  linkGradient: boolean;
-  linkBlendMode: 'normal' | 'multiply' | 'screen' | 'overlay'; // New
-  showParticles: boolean; // New
-  particleSpeed: number; // New: 0.1 - 2.0
-  useFinancialTheme: boolean; // New: Auto-color flows by category
+    // Links
+    linkCurvature: number;
+    linkCurveStyle: 'geometric' | 'organic' | 'sharp'; // New
+    linkOpacity: number;
+    linkGradient: boolean;
+    linkGradientType: 'source-to-target' | 'target-to-source' | 'both-ends'; // New
+    linkBlendMode: 'normal' | 'multiply' | 'screen' | 'overlay'; // New
+    showParticles: boolean; // New
+    particleSpeed: number; // New: 0.1 - 2.0
+    useFinancialTheme: boolean; // New: Auto-color flows by category
 
-  // Labels
-  labelPosition: 'left' | 'right' | 'inside';
-  labelFontFamily: string;
-  labelFontSize: number;
-  labelBold: boolean;
-  labelItalic: boolean;
-  labelMargin: { top: number; right: number; bottom: number; left: number };
-  showComparisonLine: boolean;
+    // Labels
+    labelPosition: 'left' | 'right' | 'inside' | 'external'; // Added 'external'
+    showLeaderLines: boolean; // New
+    leaderLineColor: string; // New
+    leaderLineWidth: number; // New
+    labelFontFamily: string;
+    labelFontSize: number;
+    labelBold: boolean;
+    labelItalic: boolean;
+    labelMargin: { top: number; right: number; bottom: number; left: number };
+    showComparisonLine: boolean;
 
   // Value formatting
   valuePrefix: string;
@@ -169,8 +189,15 @@ export interface DiagramSettings {
   isDarkMode: boolean;
   showGrid: boolean;
   snapToGrid: boolean;
-  gridSize: number;
-  enableFocusMode: boolean; // New: Toggle dimming on selection
+    gridSize: number;
+    enableFocusMode: boolean; // New: Toggle dimming on selection
+    showMiniMap: boolean; // New
+    showLegend: boolean; // New
+    legendPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'; // New
+    logoUrl?: string; // New
+    logoPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'; // New
+    logoSize: number; // New
+    logoOpacity: number; // New
 }
 
 export interface CustomLayout {
@@ -187,6 +214,7 @@ export interface DiagramState {
   dslText: string;
   nodeCustomizations: NodeCustomization[];
   independentLabels: IndependentLabel[];
+  annotationBoxes: AnnotationBox[];
   customLayout: CustomLayout;
 }
 
@@ -205,16 +233,21 @@ export const defaultSettings: DiagramSettings = {
   nodePadding: 24,
   nodeOpacity: 1,
   nodeBorderOpacity: 0.5,
-  nodeBorderRadius: 4, // Default rounded rect
-  linkCurvature: 0.7, // "SankeyArt" feel
-  linkOpacity: 0.45,
-  linkGradient: false, // Solid links by default
-  linkBlendMode: 'normal',
-  showParticles: false,
-  particleSpeed: 1.0,
-  useFinancialTheme: false, // Auto-color by category
-  labelPosition: 'right', // Standard
-  labelFontFamily: 'Manrope',
+    nodeBorderRadius: 4, // Default rounded rect
+    linkCurvature: 0.7, // "SankeyArt" feel
+    linkCurveStyle: 'organic',
+    linkOpacity: 0.45,
+    linkGradient: true, // Professional gradient by default
+    linkGradientType: 'source-to-target',
+    linkBlendMode: 'normal',
+    showParticles: false,
+    particleSpeed: 1.0,
+    useFinancialTheme: false, // Auto-color by category
+    labelPosition: 'right', // Standard
+    showLeaderLines: true,
+    leaderLineColor: '#9ca3af',
+    leaderLineWidth: 1,
+    labelFontFamily: 'Manrope',
   labelFontSize: 14,
   labelBold: true,
   labelItalic: false,
@@ -229,8 +262,14 @@ export const defaultSettings: DiagramSettings = {
   isDarkMode: false,
   showGrid: true,
   snapToGrid: true,
-  gridSize: 20,
-  enableFocusMode: true,
+    gridSize: 20,
+    enableFocusMode: true,
+    showMiniMap: false,
+    showLegend: false,
+    legendPosition: 'top-right',
+    logoPosition: 'bottom-right',
+    logoSize: 80,
+    logoOpacity: 0.8,
 };
 
 // Sample data for initial render

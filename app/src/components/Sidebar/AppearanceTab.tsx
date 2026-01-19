@@ -7,6 +7,47 @@ import { getAllPalettes, saveCustomPalette, deleteCustomPalette, getDefaultPalet
 import { getTemplates, saveTemplate, deleteTemplate, applyTemplate, PRESET_TEMPLATES, DiagramTemplate } from '@/lib/templates';
 import { GOOGLE_FONTS, NodeCustomization, DEFAULT_PALETTE } from '@/types/sankey';
 
+const THEME_PRESETS = {
+    standard: {
+        name: 'Standard',
+        settings: {
+            nodeWidth: 20,
+            linkCurvature: 0.5,
+            linkOpacity: 0.4,
+            nodePadding: 20,
+            labelPosition: 'right' as const,
+        }
+    },
+    nvidia: {
+        name: '✨ Nvidia Style (Pro)',
+        settings: {
+            nodeWidth: 120,
+            linkCurvature: 0.5,
+            linkOpacity: 0.6,
+            nodePadding: 50,
+            labelPosition: 'inside' as const,
+            labelFontSize: 14,
+            labelBold: true,
+        }
+    },
+    vietnamese: {
+        name: '🇻🇳 Vietnamese Financial',
+        settings: {
+            isDarkMode: false,
+            colorPalette: 'vietnamese',
+            linkGradient: true,
+            linkOpacity: 0.5,
+            nodeBorderRadius: 0,
+            labelPosition: 'external' as const,
+            showLeaderLines: true,
+            valuePrefix: '',
+            valueSuffix: ' tỷ đồng',
+            valueMode: 'short' as const,
+            useFinancialTheme: true,
+        }
+    }
+};
+
 export default function AppearanceTab() {
     const { state, dispatch } = useDiagram();
     const { settings, selectedNodeId, data } = state;
@@ -133,6 +174,11 @@ export default function AppearanceTab() {
     const selectedLabel = state.selectedLabelId ? state.independentLabels?.find(l => l.id === state.selectedLabelId) : null;
     const updateIndependentLabel = useCallback((id: string, updates: import('@/types/sankey').IndependentLabel) => {
         dispatch({ type: 'UPDATE_INDEPENDENT_LABEL', payload: { id, updates } });
+    }, [dispatch]);
+
+    const applyThemePreset = useCallback((key: keyof typeof THEME_PRESETS) => {
+        const preset = THEME_PRESETS[key];
+        dispatch({ type: 'UPDATE_SETTINGS', payload: preset.settings });
     }, [dispatch]);
 
     return (
@@ -530,60 +576,23 @@ export default function AppearanceTab() {
             )}
 
             {/* Smart Layout Section */}
-            <Section title="Smart Layouts" isOpen={openSections.has('smartLayouts')} onToggle={() => toggleSection('smartLayouts')}>
-                <div className="space-y-2">
+            <Section title="Theme Presets" isOpen={openSections.has('smartLayouts')} onToggle={() => toggleSection('smartLayouts')}>
+                <div className="space-y-3">
                     <p className="text-xs text-[var(--secondary-text)] mb-2">Apply professional preset styles instantly.</p>
-                    <div className="grid grid-cols-2 gap-2">
-                        <button
-                            onClick={() => {
-                                updateSetting('nodeWidth', 20);
-                                updateSetting('linkCurvature', 0.5);
-                                updateSetting('linkOpacity', 0.4);
-                                updateSetting('nodePadding', 20);
-                                updateSetting('labelPosition', 'right');
-                            }}
-                            className="p-2 text-xs border rounded bg-white hover:bg-gray-50 border-gray-200 transition-all shadow-sm hover:shadow text-center"
-                        >
-                            Standard
-                        </button>
-                        <button
-                            onClick={() => {
-                                updateSetting('nodeWidth', 120);
-                                updateSetting('linkCurvature', 0.5);
-                                updateSetting('linkOpacity', 0.6);
-                                updateSetting('nodePadding', 50);
-                                updateSetting('labelPosition', 'inside');
-                                updateSetting('labelFontSize', 14);
-                                updateSetting('labelBold', true);
-                            }}
-                            className="p-2 text-xs border rounded bg-gradient-to-r from-blue-50 to-indigo-50 border-indigo-200 text-indigo-700 hover:from-blue-100 hover:to-indigo-100 transition-all shadow-sm hover:shadow text-center font-medium"
-                        >
-                            ✨ Nvidia Style (Pro)
-                        </button>
-                        <button
-                            onClick={() => {
-                                updateSetting('nodeWidth', 8);
-                                updateSetting('linkCurvature', 0.2);
-                                updateSetting('linkOpacity', 0.2);
-                                updateSetting('nodePadding', 12);
-                                updateSetting('labelPosition', 'right');
-                            }}
-                            className="p-2 text-xs border rounded bg-white hover:bg-gray-50 border-gray-200 transition-all shadow-sm hover:shadow text-center"
-                        >
-                            Dense / Compact
-                        </button>
-                        <button
-                            onClick={() => {
-                                updateSetting('nodeWidth', 60);
-                                updateSetting('linkCurvature', 0.8);
-                                updateSetting('linkOpacity', 0.5);
-                                updateSetting('nodePadding', 30);
-                                updateSetting('labelPosition', 'inside');
-                            }}
-                            className="p-2 text-xs border rounded bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200 text-emerald-700 hover:from-emerald-100 hover:to-teal-100 transition-all shadow-sm hover:shadow text-center font-medium"
-                        >
-                            Blocks
-                        </button>
+                    <div className="grid grid-cols-1 gap-2">
+                        {(Object.entries(THEME_PRESETS) as [keyof typeof THEME_PRESETS, any][]).map(([key, preset]) => (
+                            <button
+                                key={key}
+                                onClick={() => applyThemePreset(key)}
+                                className={`p-2.5 text-sm border rounded-lg transition-all text-left flex items-center justify-between group
+                                    ${key === 'nvidia' ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-indigo-200 text-indigo-700 hover:from-blue-100 hover:to-indigo-100' : 
+                                      key === 'vietnamese' ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-200 text-red-700 hover:from-red-100 hover:to-red-100' :
+                                      'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'} shadow-sm hover:shadow`}
+                            >
+                                <span className="font-medium">{preset.name}</span>
+                                <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </button>
+                        ))}
                     </div>
                 </div>
             </Section>
@@ -682,6 +691,24 @@ export default function AppearanceTab() {
                                 className="rounded border-gray-300 text-blue-500"
                             />
                             Snap to Grid
+                        </label>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={settings.showMiniMap}
+                                onChange={(e) => updateSetting('showMiniMap', e.target.checked)}
+                                className="rounded border-gray-300 text-blue-500"
+                            />
+                            Mini-Map
+                        </label>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={settings.showLegend}
+                                onChange={(e) => updateSetting('showLegend', e.target.checked)}
+                                className="rounded border-gray-300 text-blue-500"
+                            />
+                            Show Legend
                         </label>
                     </div>
                 </div>
@@ -782,9 +809,12 @@ export default function AppearanceTab() {
                     </div>
 
                     <div>
-                        <label className="block text-xs font-medium text-[var(--secondary-text)] mb-1">
-                            Opacity: {Math.round(settings.linkOpacity * 100)}%
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="block text-xs font-medium text-[var(--secondary-text)]">Link Opacity</label>
+                            <span className="text-[10px] text-gray-500 font-mono">
+                                {Math.round(settings.linkOpacity * 100)}%
+                            </span>
+                        </div>
                         <input
                             type="range"
                             value={settings.linkOpacity}
@@ -792,8 +822,23 @@ export default function AppearanceTab() {
                             min={0.1}
                             max={1}
                             step={0.05}
-                            className="w-full"
+                            className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500 mb-2"
                         />
+                        <div className="flex gap-1.5">
+                            {[0.3, 0.45, 0.7].map((val) => (
+                                <button
+                                    key={val}
+                                    onClick={() => updateSetting('linkOpacity', val)}
+                                    className={`flex-1 py-1 text-[10px] rounded border transition-all ${
+                                        Math.abs(settings.linkOpacity - val) < 0.01 
+                                            ? 'bg-blue-500 text-white border-blue-600' 
+                                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                                    }`}
+                                >
+                                    {val === 0.3 ? 'Light' : val === 0.45 ? 'Medium' : 'Bold'} ({val * 100}%)
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     <label className="flex items-center gap-2 text-sm">
@@ -815,6 +860,33 @@ export default function AppearanceTab() {
                         />
                         Use Gradient Links
                     </label>
+
+                    {settings.linkGradient && (
+                        <div className="pl-6 space-y-2">
+                            <label className="block text-xs font-medium text-[var(--secondary-text)]">Gradient Style</label>
+                            <select
+                                value={settings.linkGradientType || 'source-to-target'}
+                                onChange={(e) => updateSetting('linkGradientType', e.target.value as any)}
+                                className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
+                            >
+                                <option value="source-to-target">Source → Target</option>
+                                <option value="both-ends">Both Ends Fade</option>
+                            </select>
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="block text-xs font-medium text-[var(--secondary-text)] mb-1">Curve Style</label>
+                        <select
+                            value={settings.linkCurveStyle || 'organic'}
+                            onChange={(e) => updateSetting('linkCurveStyle', e.target.value as any)}
+                            className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
+                        >
+                            <option value="organic">Organic (SankeyArt)</option>
+                            <option value="geometric">Geometric</option>
+                            <option value="sharp">Sharp Angles</option>
+                        </select>
+                    </div>
 
                     <label className="flex items-center gap-2 text-sm">
                         <input
@@ -907,15 +979,56 @@ export default function AppearanceTab() {
                             <label className="block text-xs font-medium text-[var(--secondary-text)] mb-1">Position</label>
                             <select
                                 value={settings.labelPosition}
-                                onChange={(e) => updateSetting('labelPosition', e.target.value as 'left' | 'right' | 'inside')}
+                                onChange={(e) => updateSetting('labelPosition', e.target.value as any)}
                                 className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
                             >
                                 <option value="left">Left</option>
                                 <option value="right">Right</option>
                                 <option value="inside">Inside</option>
+                                <option value="external">External (Leader Lines)</option>
                             </select>
                         </div>
                     </div>
+
+                    {settings.labelPosition === 'external' && (
+                        <div className="space-y-3 pt-2 border-t border-gray-100">
+                            <label className="flex items-center justify-between text-xs font-medium text-[var(--secondary-text)] cursor-pointer">
+                                <span>Show Leader Lines</span>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.showLeaderLines}
+                                    onChange={(e) => updateSetting('showLeaderLines', e.target.checked)}
+                                    className="rounded border-gray-300 text-blue-500 w-3.5 h-3.5"
+                                />
+                            </label>
+                            
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="block text-[10px] text-gray-500 mb-1">Line Color</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="color"
+                                            value={settings.leaderLineColor || '#9ca3af'}
+                                            onChange={(e) => updateSetting('leaderLineColor', e.target.value)}
+                                            className="w-6 h-6 rounded cursor-pointer border border-gray-200"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] text-gray-500 mb-1">Line Width</label>
+                                    <input
+                                        type="number"
+                                        value={settings.leaderLineWidth || 1}
+                                        onChange={(e) => updateSetting('leaderLineWidth', Number(e.target.value))}
+                                        min={0.5}
+                                        max={3}
+                                        step={0.5}
+                                        className="w-full px-2 py-0.5 text-xs border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex gap-4">
                         <label className="flex items-center gap-2 text-sm">
@@ -943,6 +1056,66 @@ export default function AppearanceTab() {
             {/* Color Palette Section */}
             <Section title="Color Palette" isOpen={openSections.has('palette')} onToggle={() => toggleSection('palette')}>
                 <div className="space-y-3">
+                    {/* Logo Section */}
+                    <div className="pb-3 border-b border-gray-100">
+                        <label className="block text-xs font-medium text-[var(--secondary-text)] mb-2">Logo Overlay</label>
+                        <div className="space-y-2">
+                            {!settings.logoUrl ? (
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            const reader = new FileReader();
+                                            reader.onload = (ev) => {
+                                                updateSetting('logoUrl', ev.target?.result as string);
+                                            };
+                                            reader.readAsDataURL(file);
+                                        }
+                                    }}
+                                    className="w-full text-xs text-slate-500 file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                />
+                            ) : (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <img src={settings.logoUrl} className="w-8 h-8 object-contain rounded border border-gray-200" alt="Logo" />
+                                            <span className="text-xs text-gray-500">Active Logo</span>
+                                        </div>
+                                        <button 
+                                            onClick={() => updateSetting('logoUrl', undefined)}
+                                            className="p-1 text-red-500 hover:bg-red-50 rounded"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <select
+                                            value={settings.logoPosition}
+                                            onChange={(e) => updateSetting('logoPosition', e.target.value as any)}
+                                            className="text-[10px] p-1 border rounded bg-white"
+                                        >
+                                            <option value="top-left">Top Left</option>
+                                            <option value="top-right">Top Right</option>
+                                            <option value="bottom-left">Bottom Left</option>
+                                            <option value="bottom-right">Bottom Right</option>
+                                        </select>
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-[10px] text-gray-400">Size:</span>
+                                            <input 
+                                                type="range" min="40" max="200" step="10"
+                                                value={settings.logoSize}
+                                                onChange={(e) => updateSetting('logoSize', Number(e.target.value))}
+                                                className="w-full h-1"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     <div>
                         <label className="block text-xs font-medium text-[var(--secondary-text)] mb-1">Theme</label>
                         <select

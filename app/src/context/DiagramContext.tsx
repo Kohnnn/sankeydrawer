@@ -21,6 +21,9 @@ type DiagramAction =
     | { type: 'ADD_INDEPENDENT_LABEL'; payload: IndependentLabel }
     | { type: 'UPDATE_INDEPENDENT_LABEL'; payload: { id: string; updates: Partial<IndependentLabel> } }
     | { type: 'DELETE_INDEPENDENT_LABEL'; payload: string }
+    | { type: 'ADD_ANNOTATION_BOX'; payload: import('@/types/sankey').AnnotationBox }
+    | { type: 'UPDATE_ANNOTATION_BOX'; payload: { id: string; updates: Partial<import('@/types/sankey').AnnotationBox> } }
+    | { type: 'DELETE_ANNOTATION_BOX'; payload: string }
     | { type: 'DELETE_NODE'; payload: string }
     | { type: 'DELETE_LINK'; payload: number }
     | { type: 'SET_NODE_CUSTOMIZATION'; payload: NodeCustomization }
@@ -50,6 +53,7 @@ const initialDiagramState: DiagramState = {
     dslText: serializeToDSL(sampleData),
     nodeCustomizations: [],
     independentLabels: [],
+    annotationBoxes: [],
     customLayout: { nodes: {}, labels: {} },
 };
 
@@ -324,6 +328,25 @@ function diagramReducer(state: DiagramState, action: DiagramAction): DiagramStat
             return { ...state, independentLabels };
         }
 
+        case 'ADD_ANNOTATION_BOX': {
+            return {
+                ...state,
+                annotationBoxes: [...(state.annotationBoxes || []), action.payload]
+            };
+        }
+
+        case 'UPDATE_ANNOTATION_BOX': {
+            const annotationBoxes = (state.annotationBoxes || []).map(b =>
+                b.id === action.payload.id ? { ...b, ...action.payload.updates } : b
+            );
+            return { ...state, annotationBoxes };
+        }
+
+        case 'DELETE_ANNOTATION_BOX': {
+            const annotationBoxes = (state.annotationBoxes || []).filter(b => b.id !== action.payload);
+            return { ...state, annotationBoxes };
+        }
+
         // ... intermediate cases ...
 
         case 'UPDATE_LAYOUT': {
@@ -456,7 +479,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const getFullStateForAI = useCallback(() => {
-        const { data, settings, nodeCustomizations, independentLabels, customLayout } = historyState.present;
+        const { data, settings, nodeCustomizations, independentLabels, customLayout, annotationBoxes } = historyState.present;
         return {
             nodes: data.nodes.map((node) => {
                 const customization = nodeCustomizations.find((c) => c.nodeId === node.id);
@@ -477,6 +500,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             })),
             settings,
             independentLabels,
+            annotationBoxes,
         };
     }, [historyState.present]);
 

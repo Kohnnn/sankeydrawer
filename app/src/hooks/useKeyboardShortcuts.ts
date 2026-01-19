@@ -4,6 +4,7 @@ import * as d3 from 'd3';
 interface KeyboardShortcutsProps {
     svgRef: RefObject<SVGSVGElement | null>;
     dispatch: any;
+    studioDispatch?: any;
     state: any;
     selectedNodeId: string | null;
 }
@@ -11,6 +12,7 @@ interface KeyboardShortcutsProps {
 export function useKeyboardShortcuts({
     svgRef,
     dispatch,
+    studioDispatch,
     state,
     selectedNodeId
 }: KeyboardShortcutsProps) {
@@ -23,6 +25,13 @@ export function useKeyboardShortcuts({
             }
 
             const ctrl = e.ctrlKey || e.metaKey;
+
+            // Toggle Sidebar (Ctrl+B)
+            if (ctrl && e.key === 'b' && studioDispatch) {
+                studioDispatch({ type: 'TOGGLE_SIDEBAR' });
+                e.preventDefault();
+                return;
+            }
 
             // Delete selected node
             if (e.key === 'Delete' || e.key === 'Backspace') {

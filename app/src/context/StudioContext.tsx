@@ -3,10 +3,10 @@
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
 
 // Tool types for the studio
-export type StudioTool = 'select' | 'pan' | 'addNode' | 'addFlow' | 'connect' | 'addLabel' | 'addImage';
+export type StudioTool = 'select' | 'pan' | 'addNode' | 'addFlow' | 'connect' | 'addLabel' | 'addImage' | 'annotate';
 
 // Element types that can be selected
-export type SelectedElementType = 'node' | 'flow' | 'label' | 'independentLabel' | null;
+export type SelectedElementType = 'node' | 'flow' | 'label' | 'independentLabel' | 'annotationBox' | null;
 
 export interface SelectedElement {
     type: SelectedElementType;
@@ -29,6 +29,7 @@ export interface StudioState {
     showGrid: boolean;
     snapToGrid: boolean;
     gridSize: number;
+    isSidebarCollapsed: boolean;
 }
 
 const initialState: StudioState = {
@@ -41,6 +42,7 @@ const initialState: StudioState = {
     showGrid: true,
     snapToGrid: false,
     gridSize: 20,
+    isSidebarCollapsed: false,
 };
 
 type StudioAction =
@@ -57,7 +59,8 @@ type StudioAction =
     | { type: 'COMPLETE_ADD_FLOW' }
     | { type: 'CANCEL_ADD_FLOW' }
     | { type: 'TOGGLE_GRID' }
-    | { type: 'TOGGLE_SNAP' };
+    | { type: 'TOGGLE_SNAP' }
+    | { type: 'TOGGLE_SIDEBAR' };
 
 function studioReducer(state: StudioState, action: StudioAction): StudioState {
     switch (action.type) {
@@ -136,6 +139,9 @@ function studioReducer(state: StudioState, action: StudioAction): StudioState {
         case 'TOGGLE_SNAP':
             return { ...state, snapToGrid: !state.snapToGrid };
 
+        case 'TOGGLE_SIDEBAR':
+            return { ...state, isSidebarCollapsed: !state.isSidebarCollapsed };
+
         default:
             return state;
     }
@@ -187,6 +193,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
             case 'connect': return state.isAddingFlow ? 'pointer' : 'crosshair';
             case 'addLabel': return 'text';
             case 'addImage': return 'copy';
+            case 'annotate': return 'crosshair';
             default: return 'default';
         }
     }, [state.currentTool, state.isPanning, state.isAddingFlow]);

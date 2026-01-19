@@ -45,6 +45,11 @@ export const DEFAULT_PALETTES: ColorPalette[] = [
         name: 'Brand Colors',
         colors: ['#DA2B1F', '#00308C', '#00FF00', '#F9C8C5', '#6688C2', '#334EA6', '#EB5F59', '#B3C2E0'],
     },
+    {
+        id: 'vietnamese',
+        name: 'Vietnamese Financial',
+        colors: ['#2563eb', '#dc2626', '#16a34a', '#6b7280', '#f59e0b', '#7c3aed', '#db2777', '#0891b2'],
+    },
 ];
 
 const STORAGE_KEY = 'sankey-custom-palettes';

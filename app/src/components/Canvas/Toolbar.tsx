@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Undo2, Redo2, Download, RotateCcw, FileJson, Image, FileCode,
     MousePointer2, Hand, Plus, GitBranch, Type, ZoomIn, ZoomOut,
-    Maximize2, RotateCw, RefreshCw, Trash2, ArrowRightLeft
+    Maximize2, RotateCw, RefreshCw, Trash2, ArrowRightLeft, SquareDashed
 } from 'lucide-react';
 import { useDiagram } from '@/context/DiagramContext';
 import { useStudio } from '@/context/StudioContext';
@@ -15,32 +15,37 @@ export default function Toolbar() {
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [showResetMenu, setShowResetMenu] = useState(false);
 
-    const handleExportPNG = () => {
+    const handleExportPNG = (scale = 2) => {
         const svg = document.querySelector('svg');
         if (!svg) return;
 
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        const scale = 2;
 
         canvas.width = state.settings.width * scale;
         canvas.height = state.settings.height * scale;
 
         const svgData = new XMLSerializer().serializeToString(svg);
+        // Ensure fonts are included or standard ones used
         const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(svgBlob);
 
         const img = new window.Image();
         img.onload = () => {
-            ctx?.scale(scale, scale);
-            ctx?.drawImage(img, 0, 0);
+            if (ctx) {
+                // Fill background if not transparent
+                ctx.fillStyle = state.settings.isDarkMode ? '#0f172a' : '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.scale(scale, scale);
+                ctx.drawImage(img, 0, 0);
 
-            const pngUrl = canvas.toDataURL('image/png');
-            const link = document.createElement('a');
-            link.download = `sankey-diagram-${Date.now()}.png`;
-            link.href = pngUrl;
-            link.click();
-
+                const pngUrl = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.download = `sankey-${scale}x-${Date.now()}.png`;
+                link.href = pngUrl;
+                link.click();
+            }
             URL.revokeObjectURL(url);
         };
         img.src = url;
@@ -88,7 +93,7 @@ export default function Toolbar() {
         icon: Icon,
         label
     }: {
-        tool: 'select' | 'pan' | 'addNode' | 'addFlow' | 'connect' | 'addLabel' | 'addImage';
+        tool: 'select' | 'pan' | 'addNode' | 'addFlow' | 'connect' | 'addLabel' | 'addImage' | 'annotate';
         icon: React.ElementType;
         label: string
     }) => (
@@ -115,6 +120,7 @@ export default function Toolbar() {
                 <ToolButton tool="connect" icon={ArrowRightLeft} label="Connect (C)" />
                 <ToolButton tool="addLabel" icon={Type} label="Add Text (T)" />
                 <ToolButton tool="addImage" icon={Image} label="Add Image (I)" />
+                <ToolButton tool="annotate" icon={SquareDashed} label="Annotate (A)" />
             </div>
 
 
@@ -155,11 +161,18 @@ export default function Toolbar() {
                     {showExportMenu && (
                         <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 py-1 bg-[var(--card-bg)] rounded-xl shadow-xl border border-[var(--border)] z-50 min-w-[160px] overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                             <button
-                                onClick={handleExportPNG}
+                                onClick={() => handleExportPNG(1)}
                                 className="flex items-center gap-2 w-full px-4 py-2 text-sm text-[var(--primary-text)] hover:bg-[var(--hover-bg)]"
                             >
                                 <Image className="w-4 h-4" />
-                                PNG Image
+                                PNG (Standard)
+                            </button>
+                            <button
+                                onClick={() => handleExportPNG(3)}
+                                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-[var(--primary-text)] hover:bg-[var(--hover-bg)] font-medium"
+                            >
+                                <Image className="w-4 h-4 text-blue-500" />
+                                PNG (High-Res 3x)
                             </button>
                             <button
                                 onClick={handleExportSVG}

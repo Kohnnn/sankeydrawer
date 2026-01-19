@@ -32,9 +32,12 @@ export function getDiagramStateForAI(state: DiagramState): string {
     const context = {
         nodes: simplifiedNodes,
         flows: simplifiedLinks,
+        annotations: state.annotationBoxes || [],
         settings: {
             // Only relevant settings for context
             valueCurrency: state.settings.valuePrefix || '$',
+            isDarkMode: state.settings.isDarkMode,
+            labelPosition: state.settings.labelPosition,
             totalValue: nodes.reduce((acc, n) => acc + (n.value || 0), 0)
         }
     };
@@ -79,12 +82,7 @@ export function applyAIChanges(currentState: DiagramState, changes: any): { succ
 
         // 2. Handle Flows
         if (changes.flows) {
-            // Strategy: For simplicity, if flows are provided, we might want to upsert them.
-            // But AI usually gives a specific list. 
-            // If the AI says "add flow", we push.
-            // If the AI gives a full list, we might replace? 
-            // Let's assume 'upsert' behavior based on source-target pair.
-
+            // ... existing flow handling ...
             changes.flows.forEach((flow: any) => {
                 const existingLinkIndex = newData.links.findIndex(l =>
                     (typeof l.source === 'object' ? (l.source as any).id : l.source) === flow.source &&
@@ -92,7 +90,6 @@ export function applyAIChanges(currentState: DiagramState, changes: any): { succ
                 );
 
                 if (existingLinkIndex >= 0) {
-                    // Update value and merge V2 fields
                     newData.links[existingLinkIndex] = {
                         ...newData.links[existingLinkIndex],
                         value: flow.value,
@@ -100,7 +97,6 @@ export function applyAIChanges(currentState: DiagramState, changes: any): { succ
                         ...(flow.originalValue !== undefined ? { originalValue: flow.originalValue } : {})
                     };
                 } else {
-                    // Add new flow with V2 fields
                     newData.links.push({
                         source: flow.source,
                         target: flow.target,
@@ -112,14 +108,27 @@ export function applyAIChanges(currentState: DiagramState, changes: any): { succ
             });
         }
 
-        // 3. Recalculate Node Values based on new flows (Basic balance pass)
-        // This is a simplified recalc. In a real app, you might want more complex logic.
-        // For now, we trust the AI/User flows, but we should update node 'value' attributes to match max(in, out)
-        // or just let the Sankey engine handle it (it usually recalculates node values from links).
-        // We will leave node.value as is or update it if explicitly changed. 
-        // Sankey libraries usually ignore node.value and compute it from links.
+        // 3. Handle Annotations (New)
+        let annotationBoxes = currentState.annotationBoxes;
+        if (changes.annotations) {
+            annotationBoxes = changes.annotations;
+        }
 
-        return { success: true, newState: { ...currentState, data: newData } };
+        // 4. Handle Settings (New)
+        let settings = currentState.settings;
+        if (changes.settings) {
+            settings = { ...settings, ...changes.settings };
+        }
+
+        return { 
+            success: true, 
+            newState: { 
+                ...currentState, 
+                data: newData, 
+                annotationBoxes, 
+                settings 
+            } 
+        };
 
     } catch (e) {
         console.error("Error applying AI changes:", e);
