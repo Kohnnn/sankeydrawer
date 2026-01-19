@@ -11,6 +11,27 @@ import CustomLabelsTab from './CustomLabelsTab';
 import DataTemplatesTab from './DataTemplatesTab';
 import JSONEditorTab from './JSONEditorTab';
 
+type TabId = 'data' | 'templates' | 'appearance' | 'labels' | 'json' | 'ai';
+type CategoryId = 'edit' | 'style';
+
+const categories: { id: CategoryId; icon: React.ReactNode; label: string }[] = [
+    { id: 'edit', icon: <Database className="w-5 h-5" />, label: 'Editor' },
+    { id: 'style', icon: <Palette className="w-5 h-5" />, label: 'Style' },
+];
+
+const tabs: Record<CategoryId, { id: TabId; label: string; icon: React.ReactNode }[]> = {
+    edit: [
+        { id: 'data', label: 'Data', icon: <Table className="w-4 h-4" /> },
+        { id: 'templates', label: 'Templates', icon: <FileSpreadsheet className="w-4 h-4" /> },
+        { id: 'ai', label: 'AI Assistant', icon: <Bot className="w-4 h-4" /> },
+        { id: 'json', label: 'JSON', icon: <FileJson className="w-4 h-4" /> },
+    ],
+    style: [
+        { id: 'appearance', label: 'Appearance', icon: <Layout className="w-4 h-4" /> },
+        { id: 'labels', label: 'Labels', icon: <Type className="w-4 h-4" /> },
+    ]
+};
+
 export default function Sidebar() {
     const { state: diagramState } = useDiagram();
     const { state: studioState, dispatch } = useStudio();
