@@ -20,6 +20,33 @@ export default function SpreadsheetEditor() {
     const [rows, setRows] = useState<GridRow[]>([]);
     const [focusedCell, setFocusedCell] = useState<{ row: number; col: 'source' | 'target' | 'value' } | null>(null);
 
+    // specific helper to update data ONLY when blurred or Enter pressed to avoid excessive re-renders
+    const commitChanges = useCallback((currentRows: GridRow[]) => {
+        // Filter out empty rows: Source and Target must be present, and Value must be non-empty (0 is allowed if meaningful, but typically links have value > 0)
+        // Also ensure we don't save the trailing empty row unless it has partial data
+        const validRows = currentRows.filter(r =>
+            r.source.trim() !== '' &&
+            r.target.trim() !== '' &&
+            r.value.trim() !== ''
+        );
+
+        const lines = validRows.map(row => {
+            const val = row.value;
+            const comp = row.comparison.trim();
+            // Format: Source [Value] Target or Source [Value, Comparison] Target
+            if (comp) {
+                return `${row.source} [${val}, ${comp}] ${row.target}`;
+            }
+            return `${row.source} [${val}] ${row.target}`;
+        });
+
+        // Join
+        const dslText = lines.join('\n');
+
+        // Dispatch DSL update (this triggers parsing and validation globally)
+        dispatch({ type: 'SET_DSL', payload: dslText });
+    }, [dispatch]);
+
     // Auto-sync rows to canvas with a small debounce
     useEffect(() => {
         const timer = setTimeout(() => {
