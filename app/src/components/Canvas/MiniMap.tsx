@@ -41,9 +41,10 @@ export default function MiniMap() {
         svg.append('rect')
             .attr('width', MINI_WIDTH)
             .attr('height', MINI_HEIGHT)
-            .attr('fill', settings.isDarkMode ? '#1e293b' : '#f8fafc')
-            .attr('stroke', settings.isDarkMode ? '#334155' : '#e2e8f0')
+            .attr('fill', '#f8fafc') // Permanently light mode
+            .attr('stroke', '#e2e8f0')
             .attr('rx', 4);
+
 
         // Simplified nodes
         data.nodes.forEach((node) => {
@@ -85,9 +86,10 @@ export default function MiniMap() {
     }, [data, settings, viewport]);
 
     return (
-        <div className="absolute bottom-6 left-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-lg p-1.5 shadow-lg border border-slate-200 dark:border-slate-700 pointer-events-none">
+        <div className="absolute bottom-6 left-6 bg-white/80 backdrop-blur-sm rounded-lg p-1.5 shadow-lg border border-slate-200 pointer-events-none">
             <div className="text-[9px] font-bold text-slate-400 uppercase mb-1 px-1">Navigation</div>
             <svg
+
                 ref={miniRef}
                 width={MINI_WIDTH}
                 height={MINI_HEIGHT}

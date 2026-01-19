@@ -77,19 +77,20 @@ export default function BalanceIndicator() {
     return (
         <div className="absolute bottom-4 left-4 z-20 animate-fade-in">
             {allBalanced ? (
-                <div className="flex items-center gap-2 px-3 py-2 glass-card text-sm">
-                    <CheckCircle className="w-4 h-4 text-green-500" />
-                    <span className="text-[var(--secondary-text)]">All flows balanced</span>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-md shadow-sm text-xs">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="text-slate-500 font-medium">Flows Balanced</span>
                 </div>
             ) : (
-                <div className="glass-card p-3 max-w-sm">
+                <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 max-w-sm">
                     {/* Header */}
-                    <div className="flex items-center gap-2 mb-2 pb-2 border-b border-[var(--border)]">
+                    <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
                         <AlertTriangle className="w-4 h-4 text-amber-500" />
-                        <span className="text-sm font-medium text-[var(--primary-text)]">
-                            Some nodes are not balanced
+                        <span className="text-sm font-semibold text-slate-800">
+                            Imbalanced Nodes
                         </span>
                     </div>
+
 
                     {/* Table */}
                     <table className="w-full text-xs">

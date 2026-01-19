@@ -174,8 +174,9 @@ export default function SankeyCanvas() {
                 .attr('patternUnits', 'userSpaceOnUse');
             pattern.append('circle')
                 .attr('cx', 1).attr('cy', 1).attr('r', 0.8)
-                .attr('fill', settings.isDarkMode ? '#1e293b' : '#e5e7eb')
-                .attr('opacity', settings.isDarkMode ? 0.4 : 1);
+                .attr('fill', '#e5e7eb')
+                .attr('opacity', 1);
+
         }
 
         // --- Update Grid Background ---
@@ -322,8 +323,8 @@ export default function SankeyCanvas() {
             legendG.append('rect')
                 .attr('width', legendWidth)
                 .attr('height', legendHeight)
-                .attr('fill', settings.isDarkMode ? 'rgba(15, 23, 42, 0.8)' : 'rgba(255, 255, 255, 0.8)')
-                .attr('stroke', settings.isDarkMode ? '#334155' : '#e2e8f0')
+                .attr('fill', 'rgba(255, 255, 255, 0.8)')
+                .attr('stroke', '#e2e8f0')
                 .attr('rx', 6);
 
             legendItems.forEach((item, i) => {
@@ -341,9 +342,10 @@ export default function SankeyCanvas() {
                     .attr('y', 10)
                     .attr('font-size', 10)
                     .attr('font-weight', '600')
-                    .attr('fill', settings.isDarkMode ? '#e5e7eb' : '#374151')
+                    .attr('fill', '#374151')
                     .text(item.label);
             });
+
         }
 
         // --- Annotation Boxes ---
@@ -416,7 +418,7 @@ export default function SankeyCanvas() {
                 return {
                     id: d.id,
                     x1: isLeft ? d.x0 - 4 : d.x1 + 4,
-                    x2: isLeft ? d.x0 - 30 : d.x1 + 30,
+                    x2: isLeft ? d.x0 - 45 : d.x1 + 45,
                     y1: midY,
                     y2: midY,
                 };
@@ -738,8 +740,9 @@ export default function SankeyCanvas() {
             .attr('opacity', 0)
             .attr('transform', (d: any) => `translate(${d.x0},${d.y0})`); // Start at correct pos
 
-        nodeEnter.append('rect').attr('rx', settings.nodeBorderRadius ?? 4).attr('ry', settings.nodeBorderRadius ?? 4).attr('filter', 'url(#node-shadow)');
-        nodeEnter.append('rect').attr('class', 'gloss').attr('fill', 'url(#node-gloss)').style('pointer-events', 'none');
+        nodeEnter.append('rect').attr('rx', settings.nodeBorderRadius ?? 0).attr('ry', settings.nodeBorderRadius ?? 0);
+        // Gloss effect removed for professional look
+
 
         const nodeUpdate = nodeEnter.merge(nodeSel as any);
 
@@ -753,15 +756,11 @@ export default function SankeyCanvas() {
 
         nodeUpdate.select('rect')
             .transition('layout').duration(750).ease(d3.easeCubicInOut) // Animate Size
-            .attr('rx', settings.nodeBorderRadius ?? 4).attr('ry', settings.nodeBorderRadius ?? 4)
+            .attr('rx', settings.nodeBorderRadius ?? 0).attr('ry', settings.nodeBorderRadius ?? 0)
             .attr('width', (d: any) => d.x1 - d.x0)
             .attr('height', (d: any) => d.y1 - d.y0)
             .attr('fill', (d: any, i) => getNodeColor(d, i)); // Color can be in style but usually stays const
 
-        nodeUpdate.select('.gloss')
-            .transition('layout').duration(750)
-            .attr('width', (d: any) => d.x1 - d.x0)
-            .attr('height', (d: any) => d.y1 - d.y0);
 
         // Drag
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -929,7 +928,7 @@ export default function SankeyCanvas() {
 
                 if (pos === 'external') {
                     const isLeft = d.x0 < width / 2;
-                    x = isLeft ? d.x0 - 40 : d.x1 + 40;
+                    x = isLeft ? d.x0 - 50 : d.x1 + 50;
                 } else if (pos === 'inside') {
                     x = d.x0 + nodeWidth / 2;
                 } else if (pos === 'right') {
@@ -980,7 +979,8 @@ export default function SankeyCanvas() {
                     .attr('font-style', (custom?.labelItalic ?? settings.labelItalic) ? 'italic' : 'normal')
                     .attr('font-family', custom?.labelFontFamily ?? settings.labelFontFamily)
                     .attr('font-size', custom?.labelFontSize ?? settings.labelFontSize)
-                    .attr('fill', custom?.labelColor || settings.isDarkMode ? '#e5e7eb' : '#1f2937'); // Dark/Light mode adapt
+                    .attr('fill', custom?.labelColor || '#1f2937'); // Fixed light mode adapt
+
 
                 // Line 2: Value
                 const valueTspan = text.append('tspan')
@@ -990,7 +990,8 @@ export default function SankeyCanvas() {
                     .attr('font-family', custom?.labelFontFamily ?? settings.labelFontFamily)
                     .attr('font-size', (custom?.labelFontSize ?? settings.labelFontSize) * 0.9) // Slightly smaller
                     .attr('font-weight', 'normal')
-                    .attr('fill', custom?.valueColor || (settings.isDarkMode ? '#9ca3af' : '#6b7280'));
+                    .attr('fill', custom?.valueColor || '#6b7280');
+
 
                 // Line 3: Custom Text (e.g. "+12%")
                 if (custom?.showSecondLine && custom.secondLineText) {
@@ -1171,8 +1172,9 @@ export default function SankeyCanvas() {
     }, [data, settings, selectedNodeId, selectedLinkIndex, state.customLayout, state.independentLabels, state.selectedLabelId, studioState.currentTool, dispatch, getNodeColor, formatValue, getCustomization, handleNodeClick, setTool]);
 
     return (
-        <div ref={containerRef} className="w-full h-full bg-white  border border-[var(--border)] rounded-lg shadow-sm overflow-hidden relative">
+        <div ref={containerRef} className="w-full h-full bg-white border-0 overflow-hidden relative">
             <svg
+
                 ref={svgRef}
                 width="100%"
                 height="100%"

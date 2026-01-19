@@ -14,8 +14,8 @@
   /* Slate-400 */
 
   /* Surface & UI */
-  --background: #f8fafc;
-  /* Slate-50 */
+  --background: #ffffff;
+  /* Pure White */
   --foreground: #0f172a;
   /* Slate-900 */
   --card-bg: #ffffff;
@@ -40,46 +40,7 @@
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
 }
 
-/* Dark Mode */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-primary: #818cf8;
-    /* Indigo-400 */
-    --color-primary-hover: #a5b4fc;
-    /* Indigo-300 */
-    --color-secondary: #94a3b8;
-    /* Slate-400 */
-    --color-positive: #34d399;
-    /* Emerald-400 */
-    --color-neutral: #64748b;
-    /* Slate-500 */
-
-    --background: #0f172a;
-    /* Slate-900 */
-    --foreground: #f1f5f9;
-    /* Slate-100 */
-    --card-bg: #1e293b;
-    /* Slate-800 */
-    --panel-bg: rgba(30, 41, 59, 0.95);
-    --border: #334155;
-    /* Slate-700 */
-
-    --primary-text: #f1f5f9;
-    /* Slate-100 */
-    --secondary-text: #94a3b8;
-    /* Slate-400 */
-    --hover-bg: #334155;
-    /* Slate-700 */
-
-    --grid-dot-color: #475569;
-    /* Slate-600 */
-
-    /* Glassmorphism - Dark */
-    --glass-bg: rgba(30, 41, 59, 0.85);
-    --glass-border: rgba(255, 255, 255, 0.1);
-    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  }
-}
+/* Dark Mode Removed */
 
 body {
   font-family: 'Manrope', system-ui, sans-serif;
@@ -249,9 +210,11 @@ svg rect {
   transition: opacity 0.2s ease, filter 0.2s ease;
 }
 
-/* Node hover glow effect */
+/* Node hover effect */
 svg rect:hover {
-  filter: drop-shadow(0 0 8px var(--color-primary));
+  filter: none;
+  stroke: var(--color-primary);
+  stroke-width: 2px;
 }
 
 /* ========================================

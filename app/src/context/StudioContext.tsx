@@ -19,6 +19,12 @@ export interface ViewportTransform {
     scale: number;
 }
 
+export interface Toast {
+    id: string;
+    message: string;
+    type: 'success' | 'error' | 'info';
+}
+
 export interface StudioState {
     currentTool: StudioTool;
     selectedElement: SelectedElement;
@@ -30,6 +36,7 @@ export interface StudioState {
     snapToGrid: boolean;
     gridSize: number;
     isSidebarCollapsed: boolean;
+    toasts: Toast[];
 }
 
 const initialState: StudioState = {
@@ -39,10 +46,11 @@ const initialState: StudioState = {
     isPanning: false,
     isAddingFlow: false,
     flowSourceNode: null,
-    showGrid: true,
+    showGrid: false, // Default to false per Phase 02
     snapToGrid: false,
     gridSize: 20,
-    isSidebarCollapsed: false,
+    isSidebarCollapsed: true, // Default to true per Phase 07
+    toasts: [],
 };
 
 type StudioAction =
@@ -60,10 +68,24 @@ type StudioAction =
     | { type: 'CANCEL_ADD_FLOW' }
     | { type: 'TOGGLE_GRID' }
     | { type: 'TOGGLE_SNAP' }
-    | { type: 'TOGGLE_SIDEBAR' };
+    | { type: 'TOGGLE_SIDEBAR' }
+    | { type: 'ADD_TOAST'; payload: Omit<Toast, 'id'> }
+    | { type: 'REMOVE_TOAST'; payload: string };
 
 function studioReducer(state: StudioState, action: StudioAction): StudioState {
     switch (action.type) {
+        case 'ADD_TOAST':
+            return {
+                ...state,
+                toasts: [...state.toasts, { ...action.payload, id: Math.random().toString(36).substr(2, 9) }]
+            };
+
+        case 'REMOVE_TOAST':
+            return {
+                ...state,
+                toasts: state.toasts.filter(t => t.id !== action.payload)
+            };
+
         case 'SET_TOOL':
             return {
                 ...state,

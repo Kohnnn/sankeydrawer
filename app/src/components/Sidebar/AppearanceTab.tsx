@@ -33,7 +33,6 @@ const THEME_PRESETS = {
     vietnamese: {
         name: '🇻🇳 Vietnamese Financial',
         settings: {
-            isDarkMode: false,
             colorPalette: 'vietnamese',
             linkGradient: true,
             linkOpacity: 0.5,
@@ -46,6 +45,7 @@ const THEME_PRESETS = {
             useFinancialTheme: true,
         }
     }
+
 };
 
 export default function AppearanceTab() {
@@ -631,15 +631,7 @@ export default function AppearanceTab() {
                         </div>
                     </div>
 
-                    <label className="flex items-center gap-2 text-sm mt-2">
-                        <input
-                            type="checkbox"
-                            checked={settings.isDarkMode}
-                            onChange={(e) => updateSetting('isDarkMode', e.target.checked)}
-                            className="rounded"
-                        />
-                        Dark Mode
-                    </label>
+                    {/* Dark Mode Removed */}
                 </div>
             </Section>
 

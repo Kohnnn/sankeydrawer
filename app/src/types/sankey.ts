@@ -186,7 +186,7 @@ export interface DiagramSettings {
   // Theme
   colorPalette: string;
   useDefaultPalette: boolean;
-  isDarkMode: boolean;
+  isDarkMode: boolean; // Note: UI toggle removed, permanently light mode
   showGrid: boolean;
   snapToGrid: boolean;
     gridSize: number;
@@ -229,21 +229,22 @@ export const defaultSettings: DiagramSettings = {
   width: 1000,
   height: 600,
   padding: { top: 40, right: 120, bottom: 40, left: 120 }, // Generous padding
-  nodeWidth: 20,
+  nodeWidth: 12,
   nodePadding: 24,
   nodeOpacity: 1,
   nodeBorderOpacity: 0.5,
-    nodeBorderRadius: 4, // Default rounded rect
-    linkCurvature: 0.7, // "SankeyArt" feel
-    linkCurveStyle: 'organic',
-    linkOpacity: 0.45,
+  nodeBorderRadius: 0, // Thinner nodes like SankeyArt
+  linkCurvature: 0.7,
+  linkCurveStyle: 'organic',
+  linkOpacity: 0.55,
+
     linkGradient: true, // Professional gradient by default
     linkGradientType: 'source-to-target',
     linkBlendMode: 'normal',
     showParticles: false,
     particleSpeed: 1.0,
     useFinancialTheme: false, // Auto-color by category
-    labelPosition: 'right', // Standard
+    labelPosition: 'external', // Standard external labels per professional overhaul
     showLeaderLines: true,
     leaderLineColor: '#9ca3af',
     leaderLineWidth: 1,
@@ -259,8 +260,8 @@ export const defaultSettings: DiagramSettings = {
   valueMode: 'absolute',
   colorPalette: 'financial',
   useDefaultPalette: true,
-  isDarkMode: false,
-  showGrid: true,
+  isDarkMode: false, // Permanently false per professional overhaul
+  showGrid: false,
   snapToGrid: true,
     gridSize: 20,
     enableFocusMode: true,

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Database, Palette, Bot, Type, Layout, Settings, FileJson, Table, ChevronLeft, ChevronRight, Sparkles, FileSpreadsheet } from 'lucide-react';
+import { Database, Palette, Bot, Type, Layout, Settings, FileJson, Table, ChevronLeft, ChevronRight, Sparkles, FileSpreadsheet, X } from 'lucide-react';
 import { useDiagram } from '@/context/DiagramContext';
 import { useStudio } from '@/context/StudioContext';
 import DataEditorTab from './DataEditorTab';
@@ -11,33 +11,23 @@ import CustomLabelsTab from './CustomLabelsTab';
 import DataTemplatesTab from './DataTemplatesTab';
 import JSONEditorTab from './JSONEditorTab';
 
-type TabId = 'data' | 'templates' | 'appearance' | 'labels' | 'json' | 'ai';
-type CategoryId = 'edit' | 'style';
-
-const categories: { id: CategoryId; icon: React.ReactNode; label: string }[] = [
-    { id: 'edit', icon: <Database className="w-5 h-5" />, label: 'Editor' },
-    { id: 'style', icon: <Palette className="w-5 h-5" />, label: 'Style' },
-];
-
-const tabs: Record<CategoryId, { id: TabId; label: string; icon: React.ReactNode }[]> = {
-    edit: [
-        { id: 'data', label: 'Data', icon: <Table className="w-4 h-4" /> },
-        { id: 'templates', label: 'Templates', icon: <FileSpreadsheet className="w-4 h-4" /> },
-        { id: 'ai', label: 'AI Assistant', icon: <Bot className="w-4 h-4" /> },
-        { id: 'json', label: 'JSON', icon: <FileJson className="w-4 h-4" /> },
-    ],
-    style: [
-        { id: 'appearance', label: 'Appearance', icon: <Layout className="w-4 h-4" /> },
-        { id: 'labels', label: 'Labels', icon: <Type className="w-4 h-4" /> },
-    ]
-};
-
 export default function Sidebar() {
     const { state: diagramState } = useDiagram();
     const { state: studioState, dispatch } = useStudio();
-    const { isSidebarCollapsed } = studioState;
+    const { isSidebarCollapsed, toasts } = studioState;
     const [activeCategory, setActiveCategory] = useState<CategoryId>('edit');
     const [activeTab, setActiveTab] = useState<TabId>('data');
+
+    // Auto-remove toasts after 3 seconds
+    useEffect(() => {
+        if (toasts.length > 0) {
+            const timer = setTimeout(() => {
+                dispatch({ type: 'REMOVE_TOAST', payload: toasts[0].id });
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [toasts, dispatch]);
+
 
     // Auto-switch to Style -> Appearance when a node is selected
     useEffect(() => {
@@ -55,10 +45,11 @@ export default function Sidebar() {
 
     return (
         <div className={`
-            relative flex h-full border-l border-[var(--glass-border)] glass-panel z-20 
+            relative flex h-full border-l border-slate-200 bg-white z-20 
             transition-all duration-300 ease-in-out
             ${isSidebarCollapsed ? 'w-14' : 'w-[30%] min-w-[320px] max-w-[480px]'}
         `}>
+
             {/* Collapse Toggle Button */}
             <button
                 onClick={() => dispatch({ type: 'TOGGLE_SIDEBAR' })}
@@ -135,6 +126,26 @@ export default function Sidebar() {
                     </div>
                 </div>
             )}
+
+            {/* Toast Container */}
+            <div className="absolute bottom-4 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+                {toasts.map((toast) => (
+                    <div
+                        key={toast.id}
+                        className={`
+                            px-4 py-2 rounded-lg shadow-lg border text-white text-sm flex items-center justify-between gap-2 pointer-events-auto animate-in slide-in-from-bottom-2
+                            ${toast.type === 'success' ? 'bg-emerald-600 border-emerald-500' : 
+                              toast.type === 'error' ? 'bg-rose-600 border-rose-500' : 
+                              'bg-blue-600 border-blue-500'}
+                        `}
+                    >
+                        <span>{toast.message}</span>
+                        <button onClick={() => dispatch({ type: 'REMOVE_TOAST', payload: toast.id })}>
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }
