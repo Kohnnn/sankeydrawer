@@ -262,6 +262,149 @@ export default function AIAssistantTab() {
         "Highlight the largest expenses"
     ];
 
+    // V9: Demo samples that work without API key
+    const DEMO_SAMPLES = [
+        {
+            name: "💰 Company Budget",
+            data: [
+                { source: "Revenue", target: "Operating Costs", value: 300 },
+                { source: "Revenue", target: "Marketing", value: 200 },
+                { source: "Revenue", target: "R&D", value: 150 },
+                { source: "Revenue", target: "Net Profit", value: 350 },
+                { source: "Operating Costs", target: "Salaries", value: 180 },
+                { source: "Operating Costs", target: "Rent", value: 80 },
+                { source: "Operating Costs", target: "Utilities", value: 40 },
+            ]
+        },
+        {
+            name: "⚡ Energy Flow",
+            data: [
+                { source: "Solar", target: "Grid", value: 400 },
+                { source: "Wind", target: "Grid", value: 300 },
+                { source: "Coal", target: "Grid", value: 200 },
+                { source: "Grid", target: "Residential", value: 500 },
+                { source: "Grid", target: "Commercial", value: 300 },
+                { source: "Grid", target: "Industrial", value: 100 },
+            ]
+        },
+        {
+            name: "📊 Website Traffic",
+            data: [
+                { source: "Organic Search", target: "Homepage", value: 450 },
+                { source: "Social Media", target: "Homepage", value: 200 },
+                { source: "Direct", target: "Homepage", value: 150 },
+                { source: "Homepage", target: "Products", value: 400 },
+                { source: "Homepage", target: "About", value: 100 },
+                { source: "Products", target: "Checkout", value: 250 },
+                { source: "Products", target: "Exit", value: 150 },
+            ]
+        }
+    ];
+
+    // V9: Local parser for text input (works without API)
+    const handleDemoParse = (text: string) => {
+        const lines = text.trim().split('\n');
+        const flows: Array<{ source: string; target: string; value: number }> = [];
+
+        lines.forEach(line => {
+            // Pattern: "Source VALUE to Target" or "Source to Target VALUE"
+            const match1 = line.match(/^(.+?)\s+(\d+)\s+to\s+(.+)$/i);
+            const match2 = line.match(/^(.+?)\s+to\s+(.+?)\s+(\d+)$/i);
+            const match3 = line.match(/^(.+?)\s*[-→>]\s*(.+?)\s*:\s*(\d+)$/i);
+            const match4 = line.match(/^(.+?)\s*,\s*(.+?)\s*,\s*(\d+)$/i); // CSV style
+
+            if (match1) {
+                flows.push({ source: match1[1].trim(), target: match1[3].trim(), value: parseInt(match1[2]) });
+            } else if (match2) {
+                flows.push({ source: match2[1].trim(), target: match2[2].trim(), value: parseInt(match2[3]) });
+            } else if (match3) {
+                flows.push({ source: match3[1].trim(), target: match3[2].trim(), value: parseInt(match3[3]) });
+            } else if (match4) {
+                flows.push({ source: match4[1].trim(), target: match4[2].trim(), value: parseInt(match4[3]) });
+            }
+        });
+
+        return flows;
+    };
+
+    const handleApplyDemoSample = (sample: typeof DEMO_SAMPLES[0]) => {
+        // Create nodes and links from sample data
+        const nodeNames = new Set<string>();
+        sample.data.forEach(flow => {
+            nodeNames.add(flow.source);
+            nodeNames.add(flow.target);
+        });
+
+        const nodes = Array.from(nodeNames).map((name, i) => ({
+            id: `demo-${i}`,
+            name: name,
+        }));
+
+        const links = sample.data.map((flow, i) => ({
+            id: `demo-link-${i}`,
+            source: nodes.find(n => n.name === flow.source)?.id || '',
+            target: nodes.find(n => n.name === flow.target)?.id || '',
+            value: flow.value,
+        }));
+
+        dispatch({ type: 'SET_DATA', payload: { nodes, links } });
+        addMessage({
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: `✅ Loaded "${sample.name}" with ${nodes.length} nodes and ${links.length} flows!`,
+            timestamp: new Date()
+        });
+    };
+
+    // V9: Handle local parsing when no API key
+    const handleLocalParse = () => {
+        if (!input.trim()) return;
+
+        const flows = handleDemoParse(input);
+        if (flows.length > 0) {
+            // Create nodes and links
+            const nodeNames = new Set<string>();
+            flows.forEach(flow => {
+                nodeNames.add(flow.source);
+                nodeNames.add(flow.target);
+            });
+
+            const nodes = Array.from(nodeNames).map((name, i) => ({
+                id: `parsed-${i}`,
+                name: name,
+            }));
+
+            const links = flows.map((flow, i) => ({
+                id: `parsed-link-${i}`,
+                source: nodes.find(n => n.name === flow.source)?.id || '',
+                target: nodes.find(n => n.name === flow.target)?.id || '',
+                value: flow.value,
+            }));
+
+            dispatch({ type: 'SET_DATA', payload: { nodes, links } });
+            addMessage({
+                id: Date.now().toString(),
+                role: 'user',
+                content: input,
+                timestamp: new Date()
+            });
+            addMessage({
+                id: (Date.now() + 1).toString(),
+                role: 'assistant',
+                content: `✅ Parsed ${flows.length} flows from your text! No API needed.`,
+                timestamp: new Date()
+            });
+            setInput('');
+        } else {
+            addMessage({
+                id: Date.now().toString(),
+                role: 'assistant',
+                content: `⚠️ Couldn't parse that format. Try:\n• Revenue 1000 to Costs\n• Revenue → Costs: 1000\n• Source, Target, 1000`,
+                timestamp: new Date()
+            });
+        }
+    };
+
     return (
         <div className="flex flex-col h-full bg-[var(--panel-bg)]">
             {/* Header */}
@@ -303,6 +446,29 @@ export default function AIAssistantTab() {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* V9: Demo Samples (works without API) */}
+            {!isConfigured && (
+                <div className="mx-4 mt-3 px-3 py-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="text-xs text-blue-700 font-medium mb-2">
+                        🎮 Try Demo Samples (No API needed):
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        {DEMO_SAMPLES.map((sample, i) => (
+                            <button
+                                key={i}
+                                onClick={() => handleApplyDemoSample(sample)}
+                                className="px-2 py-1 bg-white border border-blue-200 text-blue-600 text-xs rounded hover:bg-blue-50 transition-colors"
+                            >
+                                {sample.name}
+                            </button>
+                        ))}
+                    </div>
+                    <p className="mt-2 text-xs text-blue-600">
+                        Or type: <code className="bg-blue-100 px-1 rounded">Revenue 1000 to Costs</code>
+                    </p>
                 </div>
             )}
 

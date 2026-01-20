@@ -415,16 +415,16 @@ export default function SankeyCanvas() {
                 .attr('rx', 4);
         }
 
-        // --- Leader Lines for External Labels ---
+        // --- Leader Lines for External Labels (V7: Always show for external) ---
         leaderLayer.selectAll('*').remove();
-        if (settings.labelPosition === 'external' && settings.showLeaderLines) {
+        if (settings.labelPosition === 'external') {
             const leaderData = nodes.map((d: any) => {
                 const isLeft = d.x0 < width / 2;
                 const midY = (d.y0 + d.y1) / 2;
                 return {
                     id: d.id,
                     x1: isLeft ? d.x0 - 4 : d.x1 + 4,
-                    x2: isLeft ? d.x0 - 45 : d.x1 + 45,
+                    x2: isLeft ? d.x0 - 55 : d.x1 + 55, // V9: Match label offset (60px - 5px for spacing)
                     y1: midY,
                     y2: midY,
                 };
@@ -884,10 +884,18 @@ export default function SankeyCanvas() {
 
                 d3.select(this).attr('transform', `translate(${newX},${newY})`);
 
-                // Update temp data for links
+                // V9: Update temp data for instant link updates (no transition lag)
                 d.x0 = newX; d.x1 = newX + w; d.y0 = newY; d.y1 = newY + h;
                 sankeyGenerator.update(processedGraph);
-                linkLayer.selectAll('.sankey-link').attr('d', smoothLinkPath);
+
+                // Instant link update during drag (no transition)
+                linkLayer.selectAll('.sankey-link')
+                    .attr('d', smoothLinkPath);
+
+                // Instant label update during drag
+                labelLayer.selectAll('.sankey-label')
+                    .filter((labelD: any) => labelD.id === d.id)
+                    .attr('transform', `translate(${(d.x0 + d.x1) / 2}, ${(d.y0 + d.y1) / 2})`);
             })
             .on('end', function (e, d) {
                 guideLayer.selectAll('*').remove();
@@ -933,7 +941,7 @@ export default function SankeyCanvas() {
         labelUpdate.transition('style').duration(500)
             .attr('opacity', 1);
 
-        // Move
+        // Move with transition
         labelUpdate.transition('layout').duration(750).ease(d3.easeCubicInOut)
             .attr('transform', (d: any) => {
                 const nodeWidth = d.x1 - d.x0;
@@ -945,26 +953,17 @@ export default function SankeyCanvas() {
                 let x = 0;
                 let y = (d.y0 + d.y1) / 2;
 
+                // V9: Increased offset to prevent overlap with large nodes
                 if (pos === 'external') {
                     const isLeft = d.x0 < width / 2;
-                    x = isLeft ? d.x0 - 50 : d.x1 + 50;
+                    // Increased from 50 to 60px for better spacing
+                    x = isLeft ? d.x0 - 60 : d.x1 + 60;
                 } else if (pos === 'inside') {
                     x = d.x0 + nodeWidth / 2;
                 } else if (pos === 'right') {
-                    // Standard Right
                     x = d.x1 + 6;
                 } else {
-                    // Standard Left
                     x = d.x0 - 6;
-                }
-
-                // Override if near edges
-                if (pos !== 'inside' && pos !== 'external') {
-                    if (d.x0 < width / 2) {
-                        x = d.x1 + 6; // Force right for left-side nodes usually
-                    } else {
-                        x = d.x0 - 6; // Force left for right-side nodes
-                    }
                 }
 
                 return `translate(${x}, ${y})`;
