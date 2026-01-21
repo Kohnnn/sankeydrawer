@@ -113,6 +113,9 @@ export interface NodeCustomization {
   labelOffsetX?: number;
   labelOffsetY?: number;
 
+  // V11: Label Placement System
+  labelPlacement?: 'auto' | 'above' | 'below' | 'left' | 'right' | 'inside';
+
   // Background/Highlighting
   showLabelBackground?: boolean;
   labelBackgroundColor?: string;

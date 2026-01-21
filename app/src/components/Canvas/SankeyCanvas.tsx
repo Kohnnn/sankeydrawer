@@ -789,7 +789,7 @@ export default function SankeyCanvas() {
             .on('drag', function (e, d) {
                 // V12: Use requestAnimationFrame for smooth 60fps updates
                 if ((d as any)._dragFrame) cancelAnimationFrame((d as any)._dragFrame);
-                
+
                 const w = d.x1 - d.x0, h = d.y1 - d.y0;
                 let newX = e.x;
                 let newY = e.y;
@@ -967,10 +967,82 @@ export default function SankeyCanvas() {
 
         const labelEnter = labelSel.enter().append('text')
             .attr('class', 'sankey-label')
-            .attr('opacity', 0)
-            .style('pointer-events', 'none'); // Let clicks pass through to node
+            .attr('opacity', 0);
 
         const labelUpdate = labelEnter.merge(labelSel as any);
+
+        // V11: Label Drag Handler (for repositioning)
+        const labelDrag = d3.drag<SVGTextElement, any>()
+            .on('start', function (e, d) {
+                d3.select(this).raise().attr('cursor', 'grabbing');
+                // Store initial position
+                const transform = d3.select(this).attr('transform');
+                const match = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
+                if (match) {
+                    (d as any)._labelDragStartX = parseFloat(match[1]);
+                    (d as any)._labelDragStartY = parseFloat(match[2]);
+                } else {
+                    (d as any)._labelDragStartX = 0;
+                    (d as any)._labelDragStartY = 0;
+                }
+                (d as any)._dragTime = Date.now();
+            })
+            .on('drag', function (e, d) {
+                // V12-style requestAnimationFrame for smooth dragging
+                if ((d as any)._labelDragFrame) cancelAnimationFrame((d as any)._labelDragFrame);
+
+                (d as any)._labelDragFrame = requestAnimationFrame(() => {
+                    // Update visual position immediately
+                    d3.select(this).attr('transform', `translate(${e.x}, ${e.y})`);
+
+                    // Store temp position
+                    (d as any)._tempLabelX = e.x;
+                    (d as any)._tempLabelY = e.y;
+                });
+            })
+            .on('end', function (e, d) {
+                if ((d as any)._labelDragFrame) {
+                    cancelAnimationFrame((d as any)._labelDragFrame);
+                    (d as any)._labelDragFrame = null;
+                }
+
+                d3.select(this).attr('cursor', 'grab');
+
+                // Calculate offset from original position
+                const finalX = (d as any)._tempLabelX || (d as any)._labelDragStartX || 0;
+                const finalY = (d as any)._tempLabelY || (d as any)._labelDragStartY || 0;
+
+                const deltaX = finalX - ((d as any)._labelDragStartX || 0);
+                const deltaY = finalY - ((d as any)._labelDragStartY || 0);
+
+                // Only save if actually dragged (not just clicked)
+                const dragDuration = Date.now() - ((d as any)._dragTime || 0);
+                const dragDistance = Math.hypot(deltaX, deltaY);
+
+                if (dragDuration > 100 && dragDistance > 3) {
+                    // Get existing customization
+                    const existing = getCustomization(d.id);
+                    const currentOffsetX = (existing?.labelOffsetX as number) || 0;
+                    const currentOffsetY = (existing?.labelOffsetY as number) || 0;
+
+                    // Save cumulative offset
+                    dispatch({
+                        type: 'UPDATE_NODE_CUSTOMIZATION',
+                        payload: {
+                            nodeId: d.id,
+                            updates: {
+                                labelOffsetX: currentOffsetX + deltaX,
+                                labelOffsetY: currentOffsetY + deltaY
+                            }
+                        }
+                    });
+                }
+            });
+
+        // Apply drag handler and enable pointer events
+        labelUpdate.call(labelDrag)
+            .style('pointer-events', 'all')  // Enable dragging
+            .style('cursor', 'grab');
 
         // Appear/Disappear
         labelUpdate.transition('style').duration(500)
@@ -980,26 +1052,63 @@ export default function SankeyCanvas() {
         labelUpdate.transition('layout').duration(750).ease(d3.easeCubicInOut)
             .attr('transform', (d: any) => {
                 const nodeWidth = d.x1 - d.x0;
+                const nodeHeight = d.y1 - d.y0;
 
-                // Get customization (cached or fresh lookup)
+                // Get customization
                 const custom = getCustomization(d.id);
-                const pos = settings.labelPosition;
+                const placement = custom?.labelPlacement || 'auto';
 
                 let x = 0;
-                let y = (d.y0 + d.y1) / 2;
+                let y = 0;
 
-                // V10: Extended offset to match longer leader lines (75px + 5px spacing)
-                if (pos === 'external') {
-                    const isLeft = d.x0 < width / 2;
-                    // Increased from 60 to 80px for clearer separation from flows
-                    x = isLeft ? d.x0 - 80 : d.x1 + 80;
-                } else if (pos === 'inside') {
-                    x = d.x0 + nodeWidth / 2;
-                } else if (pos === 'right') {
-                    x = d.x1 + 6;
-                } else {
-                    x = d.x0 - 6;
+                // V11: Placement mode logic
+                switch (placement) {
+                    case 'above':
+                        x = d.x0 + nodeWidth / 2;
+                        y = d.y0 - 20;  // 20px above node
+                        break;
+                    case 'below':
+                        x = d.x0 + nodeWidth / 2;
+                        y = d.y1 + 20;  // 20px below node
+                        break;
+                    case 'left':
+                        x = d.x0 - 80;
+                        y = (d.y0 + d.y1) / 2;
+                        break;
+                    case 'right':
+                        x = d.x1 + 80;
+                        y = (d.y0 + d.y1) / 2;
+                        break;
+                    case 'inside':
+                        x = d.x0 + nodeWidth / 2;
+                        y = (d.y0 + d.y1) / 2;
+                        break;
+                    case 'auto':
+                    default:
+                        // Smart auto-placement: left side for left nodes, right for right
+                        // Falls back to global settings.labelPosition if no custom placement
+                        const pos = settings.labelPosition;
+
+                        if (pos === 'external') {
+                            const isLeft = d.x0 < width / 2;
+                            x = isLeft ? d.x0 - 80 : d.x1 + 80;
+                            y = (d.y0 + d.y1) / 2;
+                        } else if (pos === 'inside') {
+                            x = d.x0 + nodeWidth / 2;
+                            y = (d.y0 + d.y1) / 2;
+                        } else if (pos === 'right') {
+                            x = d.x1 + 6;
+                            y = (d.y0 + d.y1) / 2;
+                        } else {
+                            x = d.x0 - 6;
+                            y = (d.y0 + d.y1) / 2;
+                        }
+                        break;
                 }
+
+                // Apply custom offset (from drag-and-drop)
+                x += custom?.labelOffsetX || 0;
+                y += custom?.labelOffsetY || 0;
 
                 return `translate(${x}, ${y})`;
             })
