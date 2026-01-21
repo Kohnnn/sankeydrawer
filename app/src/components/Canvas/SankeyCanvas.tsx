@@ -424,7 +424,7 @@ export default function SankeyCanvas() {
                 return {
                     id: d.id,
                     x1: isLeft ? d.x0 - 4 : d.x1 + 4,
-                    x2: isLeft ? d.x0 - 55 : d.x1 + 55, // V9: Match label offset (60px - 5px for spacing)
+                    x2: isLeft ? d.x0 - 75 : d.x1 + 75, // V10: Extended from 55 to 75 for clearer labels
                     y1: midY,
                     y2: midY,
                 };
@@ -953,11 +953,11 @@ export default function SankeyCanvas() {
                 let x = 0;
                 let y = (d.y0 + d.y1) / 2;
 
-                // V9: Increased offset to prevent overlap with large nodes
+                // V10: Extended offset to match longer leader lines (75px + 5px spacing)
                 if (pos === 'external') {
                     const isLeft = d.x0 < width / 2;
-                    // Increased from 50 to 60px for better spacing
-                    x = isLeft ? d.x0 - 60 : d.x1 + 60;
+                    // Increased from 60 to 80px for clearer separation from flows
+                    x = isLeft ? d.x0 - 80 : d.x1 + 80;
                 } else if (pos === 'inside') {
                     x = d.x0 + nodeWidth / 2;
                 } else if (pos === 'right') {
