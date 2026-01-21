@@ -775,7 +775,7 @@ export default function SankeyCanvas() {
             .style('filter', 'none');  // Remove any shadow filter
 
 
-        // Drag
+        // Drag (V12: Optimized for 60fps with requestAnimationFrame)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const drag = d3.drag<any, any>()
             .filter((e) => !e.ctrlKey && !e.button) // Only left-click, no Ctrl
@@ -784,10 +784,15 @@ export default function SankeyCanvas() {
                 d3.select(this).raise().attr('cursor', 'grabbing');
                 (d as any)._dragStartX = e.x; (d as any)._dragStartY = e.y;
                 (d as any)._dragStartTime = Date.now();
+                (d as any)._dragFrameCount = 0;
             })
             .on('drag', function (e, d) {
+                // V12: Use requestAnimationFrame for smooth 60fps updates
+                if ((d as any)._dragFrame) cancelAnimationFrame((d as any)._dragFrame);
+                
                 const w = d.x1 - d.x0, h = d.y1 - d.y0;
                 let newX = e.x;
+                let newY = e.y;
 
                 // Snap Logic
                 if (settings.snapToGrid) {
@@ -800,110 +805,140 @@ export default function SankeyCanvas() {
                     newX = Math.max(padding.left, Math.min(width - padding.right - w, e.x));
                 }
 
-                const newY = Math.max(padding.top, Math.min(height - padding.bottom - h, e.y));
+                newY = Math.max(padding.top, Math.min(height - padding.bottom - h, e.y));
 
-                // Snap-to-Align Guides
-                guideLayer.selectAll('*').remove();
+                (d as any)._dragFrame = requestAnimationFrame(() => {
+                    // Visual-only update using CSS transform (GPU accelerated, no layout recalc)
+                    d3.select(this).attr('transform', `translate(${newX},${newY})`);
 
-                if (!settings.snapToGrid) {
-                    const alignThreshold = 5;
-                    const guides: { type: 'h' | 'v', value: number }[] = [];
+                    // Store position for later
+                    (d as any)._tempX = newX;
+                    (d as any)._tempY = newY;
 
-                    // Find alignment guides
-                    nodes.forEach((node: any) => {
-                        if (node.id === d.id) return;
+                    // Throttle expensive operations to every 3rd frame for smoothness
+                    (d as any)._dragFrameCount++;
+                    if ((d as any)._dragFrameCount % 3 === 0) {
+                        // Snap-to-Align Guides
+                        guideLayer.selectAll('*').remove();
 
-                        // Vertical alignment (x-axis)
-                        const xPositions = [
-                            node.x0,                        // Left edge
-                            (node.x0 + node.x1) / 2,       // Center
-                            node.x1                         // Right edge
-                        ];
-                        const dragXPositions = [
-                            newX,                           // Left edge
-                            newX + w / 2,                   // Center
-                            newX + w                        // Right edge
-                        ];
+                        if (!settings.snapToGrid) {
+                            const alignThreshold = 5;
+                            const guides: { type: 'h' | 'v', value: number }[] = [];
 
-                        xPositions.forEach((nodeX, i) => {
-                            dragXPositions.forEach((dragX, j) => {
-                                if (Math.abs(nodeX - dragX) < alignThreshold) {
-                                    guides.push({ type: 'v', value: nodeX });
-                                    // Snap to alignment
-                                    if (j === 0) newX = nodeX;               // Align left
-                                    else if (j === 1) newX = nodeX - w / 2;  // Align center
-                                    else newX = nodeX - w;                   // Align right
+                            // Find alignment guides
+                            nodes.forEach((node: any) => {
+                                if (node.id === d.id) return;
+
+                                // Vertical alignment (x-axis)
+                                const xPositions = [
+                                    node.x0,                        // Left edge
+                                    (node.x0 + node.x1) / 2,       // Center
+                                    node.x1                         // Right edge
+                                ];
+                                const dragXPositions = [
+                                    newX,                           // Left edge
+                                    newX + w / 2,                   // Center
+                                    newX + w                        // Right edge
+                                ];
+
+                                xPositions.forEach((nodeX, i) => {
+                                    dragXPositions.forEach((dragX, j) => {
+                                        if (Math.abs(nodeX - dragX) < alignThreshold) {
+                                            guides.push({ type: 'v', value: nodeX });
+                                            // Snap to alignment
+                                            if (j === 0) newX = nodeX;               // Align left
+                                            else if (j === 1) newX = nodeX - w / 2;  // Align center
+                                            else newX = nodeX - w;                   // Align right
+                                        }
+                                    });
+                                });
+
+                                // Horizontal alignment (y-axis)
+                                const yPositions = [
+                                    node.y0,                        // Top edge
+                                    (node.y0 + node.y1) / 2,       // Center
+                                    node.y1                         // Bottom edge
+                                ];
+                                const dragYPositions = [
+                                    newY,                           // Top edge
+                                    newY + h / 2,                   // Center
+                                    newY + h                        // Bottom edge
+                                ];
+
+                                yPositions.forEach((nodeY, i) => {
+                                    dragYPositions.forEach((dragY, j) => {
+                                        if (Math.abs(nodeY - dragY) < alignThreshold) {
+                                            guides.push({ type: 'h', value: nodeY });
+                                        }
+                                    });
+                                });
+                            });
+
+                            // Draw guides
+                            guides.forEach(guide => {
+                                if (guide.type === 'v') {
+                                    guideLayer.append('line')
+                                        .attr('x1', guide.value).attr('x2', guide.value)
+                                        .attr('y1', 0).attr('y2', height)
+                                        .attr('stroke', '#3b82f6')
+                                        .attr('stroke-width', 1)
+                                        .attr('stroke-dasharray', '4 2');
+                                } else {
+                                    guideLayer.append('line')
+                                        .attr('x1', 0).attr('x2', width)
+                                        .attr('y1', guide.value).attr('y2', guide.value)
+                                        .attr('stroke', '#3b82f6')
+                                        .attr('stroke-width', 1)
+                                        .attr('stroke-dasharray', '4 2');
                                 }
                             });
-                        });
-
-                        // Horizontal alignment (y-axis)
-                        const yPositions = [
-                            node.y0,                        // Top edge
-                            (node.y0 + node.y1) / 2,       // Center
-                            node.y1                         // Bottom edge
-                        ];
-                        const dragYPositions = [
-                            newY,                           // Top edge
-                            newY + h / 2,                   // Center
-                            newY + h                        // Bottom edge
-                        ];
-
-                        yPositions.forEach((nodeY, i) => {
-                            dragYPositions.forEach((dragY, j) => {
-                                if (Math.abs(nodeY - dragY) < alignThreshold) {
-                                    guides.push({ type: 'h', value: nodeY });
-                                }
-                            });
-                        });
-                    });
-
-                    // Draw guides
-                    guides.forEach(guide => {
-                        if (guide.type === 'v') {
-                            guideLayer.append('line')
-                                .attr('x1', guide.value).attr('x2', guide.value)
-                                .attr('y1', 0).attr('y2', height)
-                                .attr('stroke', '#3b82f6')
-                                .attr('stroke-width', 1)
-                                .attr('stroke-dasharray', '4 2');
                         } else {
-                            guideLayer.append('line')
-                                .attr('x1', 0).attr('x2', width)
-                                .attr('y1', guide.value).attr('y2', guide.value)
-                                .attr('stroke', '#3b82f6')
-                                .attr('stroke-width', 1)
-                                .attr('stroke-dasharray', '4 2');
+                            // Original grid snap guide
+                            guideLayer.append('line').attr('x1', newX + w / 2).attr('x2', newX + w / 2).attr('y1', 0).attr('y2', height)
+                                .attr('stroke', '#3b82f6').attr('stroke-dasharray', '4 2');
                         }
-                    });
-                } else {
-                    // Original grid snap guide
-                    guideLayer.append('line').attr('x1', newX + w / 2).attr('x2', newX + w / 2).attr('y1', 0).attr('y2', height)
-                        .attr('stroke', '#3b82f6').attr('stroke-dasharray', '4 2');
-                }
 
-                d3.select(this).attr('transform', `translate(${newX},${newY})`);
+                        // Update links and labels every 3rd frame instead of every frame
+                        d.x0 = newX; d.x1 = newX + w; d.y0 = newY; d.y1 = newY + h;
+                        sankeyGenerator.update(processedGraph);
 
-                // V9: Update temp data for instant link updates (no transition lag)
-                d.x0 = newX; d.x1 = newX + w; d.y0 = newY; d.y1 = newY + h;
-                sankeyGenerator.update(processedGraph);
+                        linkLayer.selectAll('.sankey-link')
+                            .attr('d', smoothLinkPath);
 
-                // Instant link update during drag (no transition)
-                linkLayer.selectAll('.sankey-link')
-                    .attr('d', smoothLinkPath);
-
-                // Instant label update during drag
-                labelLayer.selectAll('.sankey-label')
-                    .filter((labelD: any) => labelD.id === d.id)
-                    .attr('transform', `translate(${(d.x0 + d.x1) / 2}, ${(d.y0 + d.y1) / 2})`);
+                        labelLayer.selectAll('.sankey-label')
+                            .filter((labelD: any) => labelD.id === d.id)
+                            .attr('transform', `translate(${(d.x0 + d.x1) / 2}, ${(d.y0 + d.y1) / 2})`);
+                    }
+                });
             })
             .on('end', function (e, d) {
+                // Cancel any pending animation frame
+                if ((d as any)._dragFrame) {
+                    cancelAnimationFrame((d as any)._dragFrame);
+                    (d as any)._dragFrame = null;
+                }
+
                 guideLayer.selectAll('*').remove();
+
+                // Final position update with smooth transition
+                const finalX = (d as any)._tempX || d.x0;
+                const finalY = (d as any)._tempY || d.y0;
+                const w = d.x1 - d.x0, h = d.y1 - d.y0;
+
+                d.x0 = finalX; d.x1 = finalX + w; d.y0 = finalY; d.y1 = finalY + h;
+                sankeyGenerator.update(processedGraph);
+
+                // Smooth transition to final link positions
+                linkLayer.selectAll('.sankey-link')
+                    .transition().duration(150).ease(d3.easeQuadOut)
+                    .attr('d', smoothLinkPath);
+
                 d3.select(this)
                     .attr('cursor', 'pointer')
                     .transition()
                     .duration(100)
-                    .ease(d3.easeQuadOut);  // Smooth settle
+                    .ease(d3.easeQuadOut);
+
                 const dist = Math.hypot(e.x - (d as any)._dragStartX, e.y - (d as any)._dragStartY);
                 if (dist < 3 && (Date.now() - (d as any)._dragStartTime < 500)) {
                     // Click

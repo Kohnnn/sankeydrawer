@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import { GitBranch } from 'lucide-react';
 import Toolbar from '@/components/Canvas/Toolbar';
+import { CanvasErrorBoundary } from '@/components/Canvas/CanvasErrorBoundary';
 
 import Sidebar from '@/components/Sidebar/Sidebar';
 import BalanceIndicator from '@/components/Canvas/BalanceIndicator';
@@ -37,7 +38,9 @@ export default function Home() {
         {/* Canvas Area (70%) */}
         <div className="flex-1 p-0 flex flex-col min-w-0 relative bg-[var(--background)]">
           <Toolbar />
-          <SankeyCanvas />
+          <CanvasErrorBoundary>
+            <SankeyCanvas />
+          </CanvasErrorBoundary>
           <BalanceIndicator />
         </div>
 
