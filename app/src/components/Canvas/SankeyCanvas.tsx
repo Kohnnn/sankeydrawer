@@ -124,9 +124,6 @@ export default function SankeyCanvas() {
         const width = settings.width;
         const height = settings.height;
         const { padding } = settings;
-        const labelSideOffset = 8;
-        const labelAboveOffset = 10;
-        const labelBelowOffset = 6;
         const DEFAULT_LABEL_NAME_SIZE = 13;
         const DEFAULT_LABEL_VALUE_SIZE = 12;
 
@@ -498,20 +495,33 @@ export default function SankeyCanvas() {
         const linkPathGenerator = sankeyLinkHorizontal<any, any>();
         const getLinkPath = (d: any) => {
             const sx = Number(d.source.x1);
-            const sy = Number(d.y0);
             const tx = Number(d.target.x0);
+            const sy = Number(d.y0);
             const ty = Number(d.y1);
 
             if (!Number.isFinite(sx) || !Number.isFinite(sy) || !Number.isFinite(tx) || !Number.isFinite(ty)) {
                 return linkPathGenerator(d) ?? '';
             }
 
+            const bandWidth = Math.max(1.5, Number(d.width) || 0);
+            const halfWidth = bandWidth / 2;
             const curvature = Math.max(0.15, Math.min(0.85, settings.linkCurvature || 0.5));
             const interpolateX = d3.interpolateNumber(sx, tx);
             const controlX1 = interpolateX(curvature);
             const controlX2 = interpolateX(1 - curvature);
 
-            return `M${sx},${sy}C${controlX1},${sy} ${controlX2},${ty} ${tx},${ty}`;
+            const syTop = sy - halfWidth;
+            const tyTop = ty - halfWidth;
+            const syBottom = sy + halfWidth;
+            const tyBottom = ty + halfWidth;
+
+            return [
+                `M${sx},${syTop}`,
+                `C${controlX1},${syTop} ${controlX2},${tyTop} ${tx},${tyTop}`,
+                `L${tx},${tyBottom}`,
+                `C${controlX2},${tyBottom} ${controlX1},${syBottom} ${sx},${syBottom}`,
+                'Z',
+            ].join(' ');
         };
 
         const getGradientId = (sourceId: string, targetId: string, linkIndex?: number) => {
@@ -534,9 +544,9 @@ export default function SankeyCanvas() {
                 .attr('class', 'link-gradient')
                 .attr('gradientUnits', 'userSpaceOnUse')
                 .attr('x1', l.source.x1)
-                .attr('y1', 0)
+                .attr('y1', l.y0)
                 .attr('x2', l.target.x0)
-                .attr('y2', 0);
+                .attr('y2', l.y1);
 
             const sourceColor = l.source.flowColor || getNodeColor(l.source, 0);
             const targetColor = getNodeColor(l.target, 0);
@@ -560,17 +570,7 @@ export default function SankeyCanvas() {
             const depth = Number(node.depth ?? 0);
             if (depth <= 0) return 'left';
             if (depth >= maxNodeDepth) return 'right';
-
-            const leftSpace = Math.max(0, node.x0 - padding.left);
-            const rightSpace = Math.max(0, width - padding.right - node.x1);
-
-            const incomingFlowThickness = (node.targetLinks || []).reduce((sum: number, link: any) => sum + (link.width || 0), 0);
-            const outgoingFlowThickness = (node.sourceLinks || []).reduce((sum: number, link: any) => sum + (link.width || 0), 0);
-
-            const leftScore = leftSpace - incomingFlowThickness * 0.6;
-            const rightScore = rightSpace - outgoingFlowThickness * 0.6;
-
-            return rightScore > leftScore ? 'right' : 'left';
+            return 'right';
         };
 
         const resolvePlacement = (node: any, custom?: NodeCustomization): 'left' | 'right' | 'above' | 'below' | 'inside' | 'external' => {
@@ -583,7 +583,7 @@ export default function SankeyCanvas() {
             }
 
             if (settings.labelPosition === 'external') {
-                return node.x0 < width / 2 ? 'left' : 'right';
+                return getAutoPlacement(node);
             }
 
             if (settings.labelPosition === 'inside') {
@@ -598,20 +598,23 @@ export default function SankeyCanvas() {
         const getLabelCoordinates = (node: any, custom?: NodeCustomization) => {
             const nodeWidth = node.x1 - node.x0;
             const placement = resolvePlacement(node, custom);
+            const gap = 8;
 
             let x = node.x0 + nodeWidth / 2;
             let y = (node.y0 + node.y1) / 2;
 
-            if (placement === 'above') {
-                y = node.y0 - labelAboveOffset;
-            } else if (placement === 'below') {
-                y = node.y1 + labelBelowOffset;
-            } else if (placement === 'left') {
-                x = node.x0 - labelSideOffset;
+            if (placement === 'left') {
+                x = node.x0 - gap;
             } else if (placement === 'right') {
-                x = node.x1 + labelSideOffset;
+                x = node.x1 + gap;
+            } else if (placement === 'above') {
+                y = node.y0 - gap;
+            } else if (placement === 'below') {
+                y = node.y1 + gap + 12;
             } else if (placement === 'external') {
-                x = node.x0 < width / 2 ? node.x0 - labelSideOffset : node.x1 + labelSideOffset;
+                x = node.x0 < width / 2 ? node.x0 - gap : node.x1 + gap;
+            } else if (placement === 'inside') {
+                x = node.x0 + nodeWidth / 2;
             }
 
             x += custom?.labelOffsetX || 0;
@@ -717,16 +720,6 @@ export default function SankeyCanvas() {
             y1: node.y1,
         }));
 
-        const linkBounds: LabelBounds[] = links.map((link: any) => {
-            const halfWidth = Math.max(4, (link.width || 0) * 0.5);
-            return {
-                x0: Math.min(link.source.x1, link.target.x0),
-                x1: Math.max(link.source.x1, link.target.x0),
-                y0: Math.min(link.y0, link.y1) - halfWidth,
-                y1: Math.max(link.y0, link.y1) + halfWidth,
-            };
-        });
-
         const orderedNodes = [...nodes].sort((a: any, b: any) => a.y0 - b.y0);
         const placedBounds: LabelBounds[] = [];
         const labelLayouts = new Map<string, LabelLayout>();
@@ -753,7 +746,7 @@ export default function SankeyCanvas() {
             }
 
             const baseAnchor = getLabelAnchor(node, placement);
-            const anchor: 'start' | 'middle' | 'end' = custom?.labelAlignment
+            let anchor: 'start' | 'middle' | 'end' = custom?.labelAlignment
                 ? custom.labelAlignment === 'left'
                     ? 'start'
                     : custom.labelAlignment === 'right'
@@ -775,23 +768,60 @@ export default function SankeyCanvas() {
             );
 
             if (!manualLabelPosition) {
+                if ((placement === 'left' || placement === 'right') && (!custom?.labelPlacement || custom.labelPlacement === 'auto')) {
+                    const collidesInitialNode = nodeBounds.some((entry: NodeBounds) => entry.id !== node.id && intersects(bounds, entry));
+                    const collidesInitialLabel = placedBounds.some((entry: LabelBounds) => intersects(bounds, entry));
+
+                    if (collidesInitialNode || collidesInitialLabel) {
+                        const alternatePlacement: 'left' | 'right' = placement === 'left' ? 'right' : 'left';
+                        const alternateX = alternatePlacement === 'left' ? node.x0 - 8 : node.x1 + 8;
+                        const alternateAnchor = getLabelAnchor(node, alternatePlacement);
+                        const alternateBounds = createLabelBounds(
+                            alternateX,
+                            y,
+                            alternateAnchor,
+                            alternatePlacement,
+                            nameText,
+                            valueText,
+                            comparisonText,
+                            nameSize,
+                            valueSize,
+                            comparisonSize,
+                        );
+
+                        const collidesAlternateNode = nodeBounds.some(
+                            (entry: NodeBounds) => entry.id !== node.id && intersects(alternateBounds, entry),
+                        );
+                        const collidesAlternateLabel = placedBounds.some(
+                            (entry: LabelBounds) => intersects(alternateBounds, entry),
+                        );
+
+                        if (!collidesAlternateNode && !collidesAlternateLabel) {
+                            placement = alternatePlacement;
+                            x = alternateX;
+                            anchor = alternateAnchor;
+                            bounds = alternateBounds;
+                        }
+                    }
+                }
+
                 let attempts = 0;
                 const originalY = y;
-                while (attempts < 20) {
-                    const collidesNode = nodeBounds.some((entry: NodeBounds) => intersects(bounds, entry));
-                    const collidesLink = linkBounds.some((entry: LabelBounds) => intersects(bounds, entry));
+                const stepSize = 14;
+                while (attempts < 15) {
+                    const collidesNode = nodeBounds.some((entry: NodeBounds) => entry.id !== node.id && intersects(bounds, entry));
                     const collidesLabel = placedBounds.some((entry: LabelBounds) => intersects(bounds, entry));
 
-                    if (!collidesNode && !collidesLink && !collidesLabel) {
+                    if (!collidesNode && !collidesLabel) {
                         break;
                     }
 
                     attempts += 1;
 
                     if (placement === 'above') {
-                        y = originalY - attempts * 6;
+                        y = originalY - attempts * stepSize;
                     } else {
-                        const distance = Math.ceil(attempts / 2) * 6;
+                        const distance = Math.ceil(attempts / 2) * stepSize;
                         y = originalY + (attempts % 2 === 0 ? distance : -distance);
                     }
 
@@ -810,8 +840,8 @@ export default function SankeyCanvas() {
                 }
             }
 
-            if (bounds.x0 < padding.left) {
-                const delta = padding.left - bounds.x0;
+            if (bounds.x0 < 10) {
+                const delta = 10 - bounds.x0;
                 x += delta;
                 bounds = createLabelBounds(
                     x,
@@ -827,8 +857,8 @@ export default function SankeyCanvas() {
                 );
             }
 
-            if (bounds.x1 > width - padding.right) {
-                const delta = bounds.x1 - (width - padding.right);
+            if (bounds.x1 > width - 10) {
+                const delta = bounds.x1 - (width - 10);
                 x -= delta;
                 bounds = createLabelBounds(
                     x,
@@ -844,8 +874,8 @@ export default function SankeyCanvas() {
                 );
             }
 
-            if (bounds.y0 < padding.top) {
-                const delta = padding.top - bounds.y0;
+            if (bounds.y0 < 10) {
+                const delta = 10 - bounds.y0;
                 y += delta;
                 bounds = createLabelBounds(
                     x,
@@ -861,8 +891,8 @@ export default function SankeyCanvas() {
                 );
             }
 
-            if (bounds.y1 > height - padding.bottom) {
-                const delta = bounds.y1 - (height - padding.bottom);
+            if (bounds.y1 > height - 10) {
+                const delta = bounds.y1 - (height - 10);
                 y -= delta;
                 bounds = createLabelBounds(
                     x,
@@ -919,7 +949,7 @@ export default function SankeyCanvas() {
             }
 
             if (selectedNodeId) {
-                return link.source.id === selectedNodeId || link.target.id === selectedNodeId ? settings.linkOpacity : 0.25;
+                return link.source.id === selectedNodeId || link.target.id === selectedNodeId ? settings.linkOpacity : 0.4;
             }
 
             if (selectedLink) {
@@ -933,7 +963,7 @@ export default function SankeyCanvas() {
                     return settings.linkOpacity;
                 }
 
-                return touchesSelectedNodes ? Math.max(0.4, settings.linkOpacity * 0.9) : 0.25;
+                return touchesSelectedNodes ? Math.max(0.45, settings.linkOpacity * 0.9) : 0.4;
             }
 
             return settings.linkOpacity;
@@ -945,11 +975,11 @@ export default function SankeyCanvas() {
             }
 
             if (selectedNodeId) {
-                return selectedNodeConnectedIds.has(node.id) ? 1 : 0.25;
+                return selectedNodeConnectedIds.has(node.id) ? 1 : 0.4;
             }
 
             if (selectedLink) {
-                return node.id === selectedLink.source.id || node.id === selectedLink.target.id ? 1 : 0.25;
+                return node.id === selectedLink.source.id || node.id === selectedLink.target.id ? 1 : 0.4;
             }
 
             return 1;
@@ -957,6 +987,20 @@ export default function SankeyCanvas() {
 
         const getLabelOpacity = (node: any) => {
             return getNodeOpacity(node);
+        };
+
+        const getLinkFill = (d: any) => {
+            if (settings.useFinancialTheme) {
+                const sourceCategory = d.source.category;
+                if (sourceCategory === 'revenue') return COLORS.revenue;
+                if (sourceCategory === 'expense') return COLORS.expense;
+                if (sourceCategory === 'profit') return COLORS.profit;
+                return COLORS.neutral;
+            }
+
+            return settings.linkGradient
+                ? `url(#${getGradientId(d.source.id, d.target.id, d.index)})`
+                : (d.source.flowColor || getNodeColor(d.source, 0));
         };
 
 
@@ -971,7 +1015,8 @@ export default function SankeyCanvas() {
         const linkEnter = linkSel.enter().append('path')
             .attr('class', 'sankey-link cursor-pointer')
             .attr('d', getLinkPath)
-            .attr('fill', 'none')
+            .attr('fill', (d: any) => getLinkFill(d))
+            .attr('stroke', 'none')
             .attr('opacity', 0);
 
         const linkUpdate = linkEnter.merge(linkSel as any);
@@ -984,26 +1029,9 @@ export default function SankeyCanvas() {
         linkUpdate.transition('style').duration(500)
             .attr('opacity', (d: any) => getLinkOpacity(d))
             .style('mix-blend-mode', settings.linkBlendMode || 'normal')
-            .attr('fill', 'none')
-            .attr('stroke-width', (d: any) => Math.max(1, Number(d.width) || 0))
-            .attr('stroke-linecap', 'butt')
-            .attr('stroke-linejoin', 'round')
-            .style('pointer-events', 'stroke')
-            .attr('stroke', (d: any) => {
-                // Smart Financial Theme
-                if (settings.useFinancialTheme) {
-                    const sourceCategory = d.source.category;
-                    if (sourceCategory === 'revenue') return COLORS.revenue;
-                    if (sourceCategory === 'expense') return COLORS.expense;
-                    if (sourceCategory === 'profit') return COLORS.profit;
-                    return COLORS.neutral;
-                }
-
-                // Original logic
-                return settings.linkGradient
-                    ? `url(#${getGradientId(d.source.id, d.target.id, d.index)})`
-                    : (d.source.flowColor || getNodeColor(d.source, 0));
-            });
+            .attr('fill', (d: any) => getLinkFill(d))
+            .attr('stroke', 'none')
+            .style('pointer-events', 'all');
 
         // Interaction
         linkLayer.selectAll('.sankey-link')
@@ -1025,7 +1053,8 @@ export default function SankeyCanvas() {
             })
             .on('click', (e, d: any) => {
                 e.stopPropagation();
-                dispatch({ type: 'SELECT_LINK', payload: links.indexOf(d) });
+                const selectedIndex = Number.isFinite(d.index) ? Number(d.index) : links.indexOf(d);
+                dispatch({ type: 'SELECT_LINK', payload: selectedIndex >= 0 ? selectedIndex : null });
                 const formatted = formatValue(d.value, true);
                 showTooltip(e, `${d.source.name} → ${d.target.name}${formatted ? `: ${formatted}` : ''}`);
             });
@@ -1059,6 +1088,8 @@ export default function SankeyCanvas() {
         nodeUpdate.transition('style').duration(500)
             .attr('opacity', (d: any) => getNodeOpacity(d));
 
+        nodeUpdate.style('cursor', 'grab');
+
         nodeUpdate.select('rect')
             .transition('layout').duration(750).ease(d3.easeCubicInOut)
             .attr('rx', 0)  // FORCE sharp - SankeyArt style
@@ -1079,7 +1110,7 @@ export default function SankeyCanvas() {
                     .attr('opacity', (linkD: any) =>
                         linkD.source.id === d.id || linkD.target.id === d.id
                             ? 0.8
-                            : Math.min(0.25, getLinkOpacity(linkD)),
+                            : Math.min(0.4, getLinkOpacity(linkD)),
                     );
             })
             .on('mouseleave', function () {
@@ -1307,6 +1338,14 @@ export default function SankeyCanvas() {
                     return;
                 }
 
+                const custom = getCustomization(d.id);
+                const nameColor = custom?.labelColor || '#1f2937';
+                const valueColor = custom?.valueColor || '#4b5563';
+                const comparisonColor = custom?.thirdLineColor || '#9ca3af';
+                const nameWeight = (custom?.labelBold ?? settings.labelBold) ? 700 : 600;
+                const nameStyle = (custom?.labelItalic ?? settings.labelItalic) ? 'italic' : 'normal';
+                const labelFamily = custom?.labelFontFamily ?? settings.labelFontFamily ?? 'Inter, sans-serif';
+
                 text
                     .attr('text-anchor', layout.anchor)
                     .attr('paint-order', 'normal')
@@ -1318,21 +1357,21 @@ export default function SankeyCanvas() {
                     .attr('x', 0)
                     .attr('dy', layout.placement === 'inside' ? '-0.15em' : '0em')
                     .text(layout.nameText)
-                    .attr('font-weight', 600)
-                    .attr('font-style', 'normal')
-                    .attr('font-family', 'Inter, sans-serif')
+                    .attr('font-weight', nameWeight)
+                    .attr('font-style', nameStyle)
+                    .attr('font-family', labelFamily)
                     .attr('font-size', layout.nameSize)
-                    .attr('fill', '#111827');
+                    .attr('fill', nameColor);
 
                 if (layout.valueText) {
                     text.append('tspan')
                         .attr('x', 0)
                         .attr('dy', '1.15em')
                         .text(layout.valueText)
-                        .attr('font-family', 'Inter, sans-serif')
+                        .attr('font-family', labelFamily)
                         .attr('font-size', layout.valueSize)
-                        .attr('font-weight', 400)
-                        .attr('fill', '#6b7280');
+                        .attr('font-weight', custom?.valueBold ? 700 : 400)
+                        .attr('fill', valueColor);
                 }
 
                 if (layout.comparisonText) {
@@ -1340,10 +1379,10 @@ export default function SankeyCanvas() {
                         .attr('x', 0)
                         .attr('dy', '1.15em')
                         .text(layout.comparisonText)
-                        .attr('font-family', 'Inter, sans-serif')
+                        .attr('font-family', labelFamily)
                         .attr('font-size', layout.comparisonSize)
                         .attr('font-weight', 400)
-                        .attr('fill', '#94a3b8');
+                        .attr('fill', comparisonColor);
                 }
             });
 
@@ -1487,9 +1526,6 @@ export default function SankeyCanvas() {
         });
 
         svg.on('click', (event) => {
-            // Ignore if handled by children
-            if (event.defaultPrevented) return;
-
             const target = event.target as Element;
             const clickedInteractive = Boolean(
                 target.closest('.sankey-node') ||

@@ -14,11 +14,11 @@ const THEME_PRESETS = {
     standard: {
         name: 'Standard',
         settings: {
-            nodeWidth: 18,
+            nodeWidth: 12,
             linkCurvature: 0.5,
-            linkOpacity: 0.38,
-            nodePadding: 30,
-            labelPosition: 'auto' as const,
+            linkOpacity: 0.45,
+            nodePadding: 24,
+            labelPosition: 'external' as const,
         }
     },
     nvidia: {
@@ -203,6 +203,18 @@ export default function AppearanceTab() {
 
     return (
         <div className="p-4 space-y-4">
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2">
+                <label className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 cursor-pointer select-none">
+                    <span>Focus Mode (Dim Others)</span>
+                    <input
+                        type="checkbox"
+                        checked={settings.enableFocusMode}
+                        onChange={(e) => updateSetting('enableFocusMode', e.target.checked)}
+                        className="rounded border-gray-300 text-blue-500"
+                    />
+                </label>
+            </div>
+
             {/* Selected Node Section */}
             {selectedNode && (
                 <div className="bg-blue-50  rounded-lg border border-blue-200  p-4 space-y-4">
@@ -701,8 +713,8 @@ export default function AppearanceTab() {
                                 type="number"
                                 value={settings.width}
                                 onChange={(e) => updateSetting('width', Number(e.target.value))}
-                                min={600}
-                                max={5000}
+                                min={400}
+                                max={2400}
                                 step={50}
                                 className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
                             />
@@ -713,8 +725,8 @@ export default function AppearanceTab() {
                                 type="number"
                                 value={settings.height}
                                 onChange={(e) => updateSetting('height', Number(e.target.value))}
-                                min={400}
-                                max={5000}
+                                min={300}
+                                max={1600}
                                 step={50}
                                 className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
                             />
@@ -797,15 +809,6 @@ export default function AppearanceTab() {
                         <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
                             <input
                                 type="checkbox"
-                                checked={settings.enableFocusMode}
-                                onChange={(e) => updateSetting('enableFocusMode', e.target.checked)}
-                                className="rounded border-gray-300 text-blue-500"
-                            />
-                            Focus Mode (Dim Others)
-                        </label>
-                        <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
-                            <input
-                                type="checkbox"
                                 checked={settings.showMiniMap}
                                 onChange={(e) => updateSetting('showMiniMap', e.target.checked)}
                                 className="rounded border-gray-300 text-blue-500"
@@ -835,7 +838,7 @@ export default function AppearanceTab() {
                                 type="number"
                                 value={settings.nodeWidth}
                                 onChange={(e) => updateSetting('nodeWidth', Number(e.target.value))}
-                                min={8}
+                                min={4}
                                 max={40}
                                 className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
                             />
@@ -846,8 +849,8 @@ export default function AppearanceTab() {
                                 type="number"
                                 value={settings.nodePadding}
                                 onChange={(e) => updateSetting('nodePadding', Number(e.target.value))}
-                                min={10}
-                                max={80}
+                                min={4}
+                                max={60}
                                 className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
                             />
                         </div>
@@ -863,7 +866,7 @@ export default function AppearanceTab() {
                                 type="range"
                                 value={settings.nodeWidth}
                                 onChange={(e) => updateSetting('nodeWidth', Number(e.target.value))}
-                                min={8}
+                                min={4}
                                 max={40}
                                 step={2}
                                 className="w-full"
@@ -879,8 +882,8 @@ export default function AppearanceTab() {
                                 type="range"
                                 value={settings.nodePadding}
                                 onChange={(e) => updateSetting('nodePadding', Number(e.target.value))}
-                                min={10}
-                                max={80}
+                                min={4}
+                                max={60}
                                 step={5}
                                 className="w-full"
                             />

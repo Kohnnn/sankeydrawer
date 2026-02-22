@@ -19,7 +19,10 @@ export default function MiniMap() {
         if (mainSvg.empty()) return;
 
         const interval = setInterval(() => {
-            const transform = d3.zoomTransform(mainSvg.node() as any);
+            const svgNode = mainSvg.node();
+            if (!(svgNode instanceof SVGSVGElement)) return;
+
+            const transform = d3.zoomTransform(svgNode);
             setViewport({ x: transform.x, y: transform.y, k: transform.k });
         }, 100);
 

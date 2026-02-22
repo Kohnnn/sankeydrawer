@@ -1,11 +1,26 @@
-import { useEffect, RefObject } from 'react';
+import { useEffect, RefObject, type Dispatch } from 'react';
 import * as d3 from 'd3';
+import type { DiagramState, SankeyNode } from '@/types/sankey';
+
+type DiagramShortcutAction =
+    | { type: 'DELETE_NODE'; payload: string }
+    | { type: 'UNDO' }
+    | { type: 'REDO' }
+    | { type: 'ADD_NODE'; payload: SankeyNode }
+    | { type: 'MOVE_NODE'; payload: { id: string; x: number; y: number } }
+    | { type: 'UPDATE_SETTINGS'; payload: Partial<DiagramState['settings']> }
+    | { type: 'SELECT_NODE'; payload: string | null };
+
+type StudioShortcutAction = { type: 'TOGGLE_SIDEBAR' };
+
+type DiagramDispatch = Dispatch<DiagramShortcutAction>;
+type StudioDispatch = Dispatch<StudioShortcutAction>;
 
 interface KeyboardShortcutsProps {
     svgRef: RefObject<SVGSVGElement | null>;
-    dispatch: any;
-    studioDispatch?: any;
-    state: any;
+    dispatch: DiagramDispatch;
+    studioDispatch?: StudioDispatch;
+    state: DiagramState;
     selectedNodeId: string | null;
 }
 
@@ -59,7 +74,7 @@ export function useKeyboardShortcuts({
             // Duplicate node
             if (ctrl && e.key === 'd') {
                 if (selectedNodeId) {
-                    const node = state.data.nodes.find((n: any) => n.id === selectedNodeId);
+                    const node = state.data.nodes.find((n: SankeyNode) => n.id === selectedNodeId);
                     if (node) {
                         const newNode = {
                             ...node,
@@ -85,7 +100,8 @@ export function useKeyboardShortcuts({
             if (!svgRef.current) return;
 
             const svg = d3.select(svgRef.current);
-            const zoomBehavior = (svg.node() as any)?.__zoomBehavior;
+            const svgNode = svg.node() as (SVGSVGElement & { __zoomBehavior?: d3.ZoomBehavior<SVGSVGElement, unknown> }) | null;
+            const zoomBehavior = svgNode?.__zoomBehavior;
             if (!zoomBehavior) return;
 
             // Zoom in
@@ -111,10 +127,10 @@ export function useKeyboardShortcuts({
 
             // Fit to screen
             if (e.key === 'f' || e.key === 'F') {
-                const mainGroup = svg.select('g.main-group');
+                const mainGroup = svg.select<SVGGElement>('g.main-group');
                 if (mainGroup.empty()) return;
 
-                const bounds = (mainGroup.node() as any)?.getBBox();
+                const bounds = mainGroup.node()?.getBBox();
                 if (!bounds) return;
 
                 const width = state.settings.width;

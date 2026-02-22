@@ -308,7 +308,6 @@ button:active {
 
 /* Phase 06: Smooth transitions for SVG elements */
 svg path.sankey-link {
-  fill: none;
   transition: none;
 }
 

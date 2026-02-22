@@ -25,7 +25,12 @@ export default function BalanceIndicator() {
             // Calculate total inflows
             const totalIn = data.links
                 .filter(l => {
-                    const targetId = typeof l.target === 'string' ? l.target : (l.target as any)?.id;
+                    const targetId =
+                        typeof l.target === 'string'
+                            ? l.target
+                            : typeof l.target === 'number'
+                                ? data.nodes[l.target]?.id
+                                : undefined;
                     return targetId === node.id;
                 })
                 .reduce((sum, l) => sum + l.value, 0);
@@ -33,7 +38,12 @@ export default function BalanceIndicator() {
             // Calculate total outflows
             const totalOut = data.links
                 .filter(l => {
-                    const sourceId = typeof l.source === 'string' ? l.source : (l.source as any)?.id;
+                    const sourceId =
+                        typeof l.source === 'string'
+                            ? l.source
+                            : typeof l.source === 'number'
+                                ? data.nodes[l.source]?.id
+                                : undefined;
                     return sourceId === node.id;
                 })
                 .reduce((sum, l) => sum + l.value, 0);

@@ -58,17 +58,17 @@ export default function Sidebar() {
     }, [toasts, dispatch]);
 
 
-    // Auto-switch to Style -> Appearance when a node is selected
+    // Auto expand sidebar when a node is selected
     useEffect(() => {
         if (diagramState.selectedNodeId) {
-            setActiveCategory('style');
-            setActiveTab('appearance');
-            // Auto expand if collapsed
             if (isSidebarCollapsed) {
                 dispatch({ type: 'TOGGLE_SIDEBAR' });
             }
         }
     }, [diagramState.selectedNodeId, isSidebarCollapsed, dispatch]);
+
+    const forcedStyleMode = Boolean(diagramState.selectedNodeId);
+    const visibleCategory: CategoryId = forcedStyleMode ? 'style' : activeCategory;
 
     const getTabsForCategory = (category: CategoryId) => {
         if (!showAdvancedTabs) {
@@ -77,10 +77,12 @@ export default function Sidebar() {
         return [...baseTabs[category], ...advancedTabs[category]];
     };
 
-    const currentTabs = getTabsForCategory(activeCategory);
-    const effectiveActiveTab = currentTabs.some((tab) => tab.id === activeTab)
-        ? activeTab
-        : currentTabs[0].id;
+    const currentTabs = getTabsForCategory(visibleCategory);
+    const effectiveActiveTab = forcedStyleMode
+        ? 'appearance'
+        : currentTabs.some((tab) => tab.id === activeTab)
+            ? activeTab
+            : currentTabs[0].id;
 
     return (
         <div className={`
@@ -115,7 +117,7 @@ export default function Sidebar() {
                                 dispatch({ type: 'TOGGLE_SIDEBAR' });
                             }
                         }}
-                        className={`p-2.5 rounded-lg transition-all ${activeCategory === cat.id
+                        className={`p-2.5 rounded-lg transition-all ${visibleCategory === cat.id
                             ? 'bg-blue-100 text-blue-600   shadow-sm'
                             : 'text-[var(--secondary-text)] hover:bg-[var(--hover-bg)] hover:text-[var(--primary-text)]'
                             }`}

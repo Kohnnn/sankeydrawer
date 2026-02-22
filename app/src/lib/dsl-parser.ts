@@ -134,7 +134,7 @@ export function parseDSL(text: string): SankeyData | null {
         }
     }
 
-    let processedLinks = Array.from(uniqueLinks.values());
+    const processedLinks = Array.from(uniqueLinks.values());
 
     // 2. Remove Cycles (D3 Sankey requires DAG)
     // Build adjacency list

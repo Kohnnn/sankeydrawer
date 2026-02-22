@@ -43,8 +43,26 @@ export interface Attachment {
 
 const AISettingsContext = createContext<AISettingsContextType | null>(null);
 
+function loadInitialSettings(): AISettings {
+    if (typeof window === 'undefined') {
+        return defaultAISettings;
+    }
+
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            return { ...defaultAISettings, ...parsed };
+        }
+    } catch (e) {
+        console.error('Failed to load AI settings:', e);
+    }
+
+    return defaultAISettings;
+}
+
 export function AISettingsProvider({ children }: { children: React.ReactNode }) {
-    const [settings, setSettings] = useState<AISettings>(defaultAISettings);
+    const [settings, setSettings] = useState<AISettings>(loadInitialSettings);
     const [messages, setMessagesState] = useState<Message[]>([
         {
             id: '1',
@@ -53,28 +71,14 @@ export function AISettingsProvider({ children }: { children: React.ReactNode }) 
             timestamp: new Date(),
         },
     ]);
-    const [isLoaded, setIsLoaded] = useState(false);
-
-    // Load from localStorage on mount
-    useEffect(() => {
-        try {
-            const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                setSettings({ ...defaultAISettings, ...parsed });
-            }
-        } catch (e) {
-            console.error('Failed to load AI settings:', e);
-        }
-        setIsLoaded(true);
-    }, []);
-
     // Save to localStorage on change
     useEffect(() => {
-        if (isLoaded) {
+        try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        } catch (e) {
+            console.error('Failed to save AI settings:', e);
         }
-    }, [settings, isLoaded]);
+    }, [settings]);
 
     const updateSettings = useCallback((updates: Partial<AISettings>) => {
         setSettings(prev => ({ ...prev, ...updates }));

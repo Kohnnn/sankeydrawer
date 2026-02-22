@@ -232,16 +232,16 @@ export interface HistoryState {
 export const defaultSettings: DiagramSettings = {
   width: 960,
   height: 600,
-  padding: { top: 70, right: 200, bottom: 50, left: 200 },
+  padding: { top: 50, right: 50, bottom: 40, left: 50 },
   diagramTitle: '',
-  nodeWidth: 18,
-  nodePadding: 30,
+  nodeWidth: 12,
+  nodePadding: 24,
   nodeOpacity: 1,
   nodeBorderOpacity: 0,
   nodeBorderRadius: 0, // Thinner nodes like SankeyArt
   linkCurvature: 0.5,
   linkCurveStyle: 'organic',
-  linkOpacity: 0.38,
+  linkOpacity: 0.45,
 
   linkGradient: true, // Professional gradient by default
   linkGradientType: 'source-to-target',
@@ -249,7 +249,7 @@ export const defaultSettings: DiagramSettings = {
   showParticles: false,
   particleSpeed: 1.0,
   useFinancialTheme: false, // Auto-color by category
-  labelPosition: 'auto',
+  labelPosition: 'external',
   showLeaderLines: false,
   leaderLineColor: '#9ca3af',
   leaderLineWidth: 1,
@@ -269,7 +269,7 @@ export const defaultSettings: DiagramSettings = {
   showGrid: false,
   snapToGrid: false,  // Free movement by default (SankeyArt style)
   gridSize: 20,
-  enableFocusMode: true,
+  enableFocusMode: false,
   showMiniMap: false,
   showLegend: false,
   legendPosition: 'top-right',

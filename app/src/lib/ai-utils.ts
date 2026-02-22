@@ -1,4 +1,28 @@
-import { DiagramState, SankeyData, SankeyNode, SankeyLink } from '@/types/sankey';
+import type { DiagramState, SankeyData, SankeyLink, SankeyNode } from '@/types/sankey';
+
+interface AIFlowChange {
+    source: string;
+    target: string;
+    value: number;
+    comparisonValue?: string;
+    metadata?: Record<string, unknown>;
+    originalValue?: number;
+}
+
+interface AIChanges {
+    nodes?: Record<string, Partial<SankeyNode>>;
+    flows?: AIFlowChange[];
+    annotations?: DiagramState['annotationBoxes'];
+    settings?: Partial<DiagramState['settings']>;
+}
+
+function getEndpointId(endpoint: SankeyLink['source'] | SankeyLink['target']): string | number {
+    if (typeof endpoint === 'object' && endpoint !== null && 'id' in endpoint) {
+        return (endpoint as { id?: string | number }).id ?? '';
+    }
+
+    return endpoint;
+}
 
 /**
  * Prepares a optimized, token-efficient string representation of the diagram state for the AI.
@@ -21,8 +45,8 @@ export function getDiagramStateForAI(state: DiagramState): string {
 
     // Simplify Links: SourceID, TargetID, Value, Metadata, OriginalValue (V2)
     const simplifiedLinks = links.map(l => ({
-        s: typeof l.source === 'object' ? (l.source as any).id : l.source,
-        t: typeof l.target === 'object' ? (l.target as any).id : l.target,
+        s: getEndpointId(l.source),
+        t: getEndpointId(l.target),
         v: l.value,
         c: l.comparisonValue, // Add comparison (e.g., "+10%")
         ...(l.metadata ? { metadata: l.metadata } : {}),
@@ -49,32 +73,34 @@ export function getDiagramStateForAI(state: DiagramState): string {
  * Applies a partial update or complex change from the AI to the current state.
  * Handles merging nodes, updating flows, and recalculating values.
  */
-export function applyAIChanges(currentState: DiagramState, changes: any): { success: boolean; newState?: DiagramState; errors?: string[] } {
+export function applyAIChanges(currentState: DiagramState, changes: AIChanges): { success: boolean; newState?: DiagramState; errors?: string[] } {
     try {
         const newData: SankeyData = JSON.parse(JSON.stringify(currentState.data)); // Deep copy
-        const errors: string[] = [];
 
         // 1. Handle Nodes
         if (changes.nodes) {
-            Object.entries(changes.nodes).forEach(([id, attrs]: [string, any]) => {
+            Object.entries(changes.nodes).forEach(([id, attrs]) => {
+                const nodeAttrs = attrs ?? {};
                 const existingNodeIndex = newData.nodes.findIndex(n => n.id === id);
                 if (existingNodeIndex >= 0) {
                     // Update existing node, merging in new V2 fields
                     newData.nodes[existingNodeIndex] = {
                         ...newData.nodes[existingNodeIndex],
-                        ...attrs,
+                        ...nodeAttrs,
                         // Explicitly merge V2 fields
-                        ...(attrs.group !== undefined ? { group: attrs.group } : {}),
-                        ...(attrs.metadata ? { metadata: { ...newData.nodes[existingNodeIndex].metadata, ...attrs.metadata } } : {}),
-                        ...(attrs.originalValue !== undefined ? { originalValue: attrs.originalValue } : {})
+                        ...(nodeAttrs.group !== undefined ? { group: nodeAttrs.group } : {}),
+                        ...(nodeAttrs.metadata
+                            ? { metadata: { ...newData.nodes[existingNodeIndex].metadata, ...nodeAttrs.metadata } }
+                            : {}),
+                        ...(nodeAttrs.originalValue !== undefined ? { originalValue: nodeAttrs.originalValue } : {}),
                     };
                 } else {
                     // Create new node with all V2 fields
                     newData.nodes.push({
                         id,
-                        name: attrs.name || id,
+                        name: nodeAttrs.name || id,
                         value: 0,
-                        ...attrs
+                        ...nodeAttrs,
                     });
                 }
             });
@@ -82,27 +108,28 @@ export function applyAIChanges(currentState: DiagramState, changes: any): { succ
 
         // 2. Handle Flows
         if (changes.flows) {
-            // ... existing flow handling ...
-            changes.flows.forEach((flow: any) => {
+            changes.flows.forEach((flow) => {
                 const existingLinkIndex = newData.links.findIndex(l =>
-                    (typeof l.source === 'object' ? (l.source as any).id : l.source) === flow.source &&
-                    (typeof l.target === 'object' ? (l.target as any).id : l.target) === flow.target
+                    getEndpointId(l.source) === flow.source &&
+                    getEndpointId(l.target) === flow.target,
                 );
 
                 if (existingLinkIndex >= 0) {
                     newData.links[existingLinkIndex] = {
                         ...newData.links[existingLinkIndex],
                         value: flow.value,
+                        ...(flow.comparisonValue !== undefined ? { comparisonValue: flow.comparisonValue } : {}),
                         ...(flow.metadata ? { metadata: { ...newData.links[existingLinkIndex].metadata, ...flow.metadata } } : {}),
-                        ...(flow.originalValue !== undefined ? { originalValue: flow.originalValue } : {})
+                        ...(flow.originalValue !== undefined ? { originalValue: flow.originalValue } : {}),
                     };
                 } else {
                     newData.links.push({
                         source: flow.source,
                         target: flow.target,
                         value: flow.value,
+                        ...(flow.comparisonValue !== undefined ? { comparisonValue: flow.comparisonValue } : {}),
                         ...(flow.metadata ? { metadata: flow.metadata } : {}),
-                        ...(flow.originalValue !== undefined ? { originalValue: flow.originalValue } : {})
+                        ...(flow.originalValue !== undefined ? { originalValue: flow.originalValue } : {}),
                     });
                 }
             });
