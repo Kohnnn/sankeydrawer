@@ -79,14 +79,18 @@ export default function SpreadsheetEditor() {
     // Initialize rows from diagram data
     useEffect(() => {
         const newRows = state.data.links.map(link => {
-            const getNodeName = (ref: string | number | any) => {
+            const getNodeName = (ref: string | number | { id?: string; name?: string } | null | undefined) => {
                 if (typeof ref === 'object' && ref !== null) {
                     return ref.name || ref.id || '';
                 }
                 if (typeof ref === 'string') {
                     return state.data.nodes.find(n => n.id === ref)?.name || ref;
                 }
-                return state.data.nodes[ref]?.name || '';
+                if (typeof ref === 'number') {
+                    return state.data.nodes[ref]?.name || '';
+                }
+
+                return '';
             };
 
             // Prefer previousValue (raw number) for editing, fall back to comparisonValue (string)
@@ -156,14 +160,38 @@ export default function SpreadsheetEditor() {
         commitChanges(newRows);
     };
 
-    const handleAddRow = () => {
-        setRows(prev => [...prev, { source: '', target: '', value: '', comparison: '', isValid: true }]);
-        // Scroll to bottom?
+    const handleAddRows = (count: number) => {
+        if (!Number.isFinite(count) || count <= 0) {
+            return;
+        }
+
+        const safeCount = Math.min(100, Math.max(1, Math.floor(count)));
+        const emptyRows: GridRow[] = Array.from({ length: safeCount }, () => ({
+            source: '',
+            target: '',
+            value: '',
+            comparison: '',
+            isValid: true,
+        }));
+
+        setRows((prev) => [...prev, ...emptyRows]);
+
         setTimeout(() => {
-            if (rowRefs.current[rows.length]) {
-                rowRefs.current[rows.length]?.scrollIntoView({ behavior: 'smooth' });
+            const targetIndex = rows.length + safeCount - 1;
+            if (rowRefs.current[targetIndex]) {
+                rowRefs.current[targetIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
         }, 100);
+    };
+
+    const handleAddRowsPrompt = () => {
+        const input = window.prompt('How many rows do you want to add?', '5');
+        if (!input) {
+            return;
+        }
+
+        const requested = Number(input);
+        handleAddRows(requested);
     };
 
     const handlePaste = useCallback((e: React.ClipboardEvent) => {
@@ -363,9 +391,19 @@ export default function SpreadsheetEditor() {
                 })}
             </div>
 
-            <div className="p-3 border-t border-gray-200  bg-gray-50  text-xs text-gray-500 font-medium flex justify-between">
+            <div className="p-3 border-t border-gray-200  bg-gray-50  text-xs text-gray-500 font-medium flex items-center justify-between gap-2">
                 <span>{rows.filter(r => r.isValid && r.source).length} Flows</span>
-                <span>Press Enter to save • Paste Excel data directly</span>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={handleAddRowsPrompt}
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-gray-300 text-[11px] font-medium text-gray-600 hover:bg-white transition-colors"
+                    >
+                        <Plus size={12} />
+                        Add N rows
+                    </button>
+                    <span>Press Enter to save • Paste Excel data directly</span>
+                </div>
             </div>
         </div>
     );

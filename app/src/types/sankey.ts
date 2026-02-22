@@ -234,8 +234,8 @@ export const defaultSettings: DiagramSettings = {
   height: 600,
   padding: { top: 70, right: 200, bottom: 50, left: 200 },
   diagramTitle: '',
-  nodeWidth: 24,
-  nodePadding: 20,
+  nodeWidth: 18,
+  nodePadding: 30,
   nodeOpacity: 1,
   nodeBorderOpacity: 0,
   nodeBorderRadius: 0, // Thinner nodes like SankeyArt

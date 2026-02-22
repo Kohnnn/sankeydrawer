@@ -32,7 +32,7 @@ export default function SankeyCanvas() {
     const containerRef = useRef<HTMLDivElement>(null);
     const { state, dispatch } = useDiagram();
     const { state: studioState, dispatch: studioDispatch, setTool } = useStudio();
-    const { data, settings, selectedNodeId, nodeCustomizations } = state;
+    const { data, settings, selectedNodeId, selectedLinkIndex, nodeCustomizations } = state;
     const [popover, setPopover] = useState<PopoverState | null>(null);
     const [statusText, setStatusText] = useState('Click on any element to edit it');
 
@@ -124,7 +124,7 @@ export default function SankeyCanvas() {
         const width = settings.width;
         const height = settings.height;
         const { padding } = settings;
-        const labelSideOffset = 14;
+        const labelSideOffset = 8;
         const labelAboveOffset = 10;
         const labelBelowOffset = 6;
         const DEFAULT_LABEL_NAME_SIZE = 13;
@@ -156,7 +156,7 @@ export default function SankeyCanvas() {
                 .filter((event) => {
                     // Don't trigger zoom/pan when dragging nodes
                     const target = event.target as Element;
-                    if (target.closest('.sankey-node')) return false;
+                    if (target.closest('.sankey-node') || target.closest('.sankey-label') || target.closest('.indep-label')) return false;
                     return !event.ctrlKey && !event.button;
                 })
                 .on('zoom', (event) => {
@@ -412,7 +412,7 @@ export default function SankeyCanvas() {
                 .attr('text-anchor', 'middle')
                 .attr('font-family', 'Inter, sans-serif')
                 .attr('font-weight', 600)
-                .attr('font-size', 24)
+                .attr('font-size', 20)
                 .attr('fill', '#1f2937')
                 .style('pointer-events', 'none')
                 .text(settings.diagramTitle);
@@ -536,12 +536,25 @@ export default function SankeyCanvas() {
                 .attr('stop-opacity', 1);
         });
 
-        const getAutoPlacement = (node: any): 'left' | 'right' | 'above' => {
-            const incoming = node.targetLinks?.length ?? 0;
-            const outgoing = node.sourceLinks?.length ?? 0;
-            if (incoming === 0 && outgoing > 0) return 'left';
-            if (outgoing === 0 && incoming > 0) return 'right';
-            return 'above';
+        const maxNodeDepth = nodes.reduce((maxDepth: number, node: any) => {
+            return Math.max(maxDepth, Number(node.depth ?? 0));
+        }, 0);
+
+        const getAutoPlacement = (node: any): 'left' | 'right' => {
+            const depth = Number(node.depth ?? 0);
+            if (depth <= 0) return 'left';
+            if (depth >= maxNodeDepth) return 'right';
+
+            const leftSpace = Math.max(0, node.x0 - padding.left);
+            const rightSpace = Math.max(0, width - padding.right - node.x1);
+
+            const incomingFlowThickness = (node.targetLinks || []).reduce((sum: number, link: any) => sum + (link.width || 0), 0);
+            const outgoingFlowThickness = (node.sourceLinks || []).reduce((sum: number, link: any) => sum + (link.width || 0), 0);
+
+            const leftScore = leftSpace - incomingFlowThickness * 0.6;
+            const rightScore = rightSpace - outgoingFlowThickness * 0.6;
+
+            return rightScore > leftScore ? 'right' : 'left';
         };
 
         const resolvePlacement = (node: any, custom?: NodeCustomization): 'left' | 'right' | 'above' | 'below' | 'inside' | 'external' => {
@@ -616,8 +629,10 @@ export default function SankeyCanvas() {
             anchor: 'start' | 'middle' | 'end';
             nameText: string;
             valueText: string;
+            comparisonText: string;
             nameSize: number;
             valueSize: number;
+            comparisonSize: number;
         }
 
         const intersects = (a: LabelBounds, b: LabelBounds) => {
@@ -636,14 +651,20 @@ export default function SankeyCanvas() {
             placement: string,
             nameText: string,
             valueText: string,
+            comparisonText: string,
             nameSize: number,
             valueSize: number,
+            comparisonSize: number,
         ): LabelBounds => {
             const labelWidth = Math.max(
                 estimateTextWidth(nameText, nameSize),
                 estimateTextWidth(valueText, valueSize),
+                estimateTextWidth(comparisonText, comparisonSize),
             );
-            const labelHeight = valueText ? nameSize + valueSize + 4 : nameSize;
+            const labelHeight =
+                nameSize +
+                (valueText ? valueSize + 4 : 0) +
+                (comparisonText ? comparisonSize + 3 : 0);
 
             let x0 = x - labelWidth / 2;
             if (anchor === 'start') {
@@ -661,6 +682,15 @@ export default function SankeyCanvas() {
                 y0: y0 - paddingPx,
                 y1: y0 + labelHeight + paddingPx * 2,
             };
+        };
+
+        const getNodeComparisonText = (node: any): string => {
+            const linksWithComparison = [...(node.sourceLinks || []), ...(node.targetLinks || [])];
+            const match = linksWithComparison.find((link: any) => {
+                return typeof link.comparisonValue === 'string' && link.comparisonValue.trim().length > 0;
+            });
+
+            return match ? String(match.comparisonValue).trim() : '';
         };
 
         const nodeBounds: NodeBounds[] = nodes.map((node: any) => ({
@@ -687,14 +717,24 @@ export default function SankeyCanvas() {
 
         orderedNodes.forEach((node: any) => {
             const custom = getCustomization(node.id);
-            const { placement } = getLabelCoordinates(node, custom);
-            const { x, y: initialY } = getLabelCoordinates(node, custom);
-            let y = initialY;
+            const manualLabelPosition = state.customLayout?.labels?.[node.id];
+            const { placement: computedPlacement } = getLabelCoordinates(node, custom);
+            let placement = computedPlacement;
+            let x = getLabelCoordinates(node, custom).x;
+            let y = getLabelCoordinates(node, custom).y;
 
             const nameText = custom?.labelText || node.name;
             const valueText = formatValue(node.value);
+            const comparisonText = getNodeComparisonText(node);
             const nameSize = custom?.labelFontSize ?? settings.labelFontSize ?? DEFAULT_LABEL_NAME_SIZE;
             const valueSize = Math.max(DEFAULT_LABEL_VALUE_SIZE, Math.round(nameSize - 1));
+            const comparisonSize = 11;
+
+            if (manualLabelPosition) {
+                x = manualLabelPosition.x;
+                y = manualLabelPosition.y;
+                placement = x < node.x0 ? 'left' : x > node.x1 ? 'right' : 'above';
+            }
 
             const baseAnchor = getLabelAnchor(node, placement);
             const anchor: 'start' | 'middle' | 'end' = custom?.labelAlignment
@@ -705,11 +745,23 @@ export default function SankeyCanvas() {
                         : 'middle'
                 : baseAnchor;
 
-            let bounds = createLabelBounds(x, y, anchor, placement, nameText, valueText, nameSize, valueSize);
+            let bounds = createLabelBounds(
+                x,
+                y,
+                anchor,
+                placement,
+                nameText,
+                valueText,
+                comparisonText,
+                nameSize,
+                valueSize,
+                comparisonSize,
+            );
 
-            if (placement === 'above') {
+            if (!manualLabelPosition) {
                 let attempts = 0;
-                while (attempts < 18) {
+                const originalY = y;
+                while (attempts < 20) {
                     const collidesNode = nodeBounds.some((entry: NodeBounds) => intersects(bounds, entry));
                     const collidesLink = linkBounds.some((entry: LabelBounds) => intersects(bounds, entry));
                     const collidesLabel = placedBounds.some((entry: LabelBounds) => intersects(bounds, entry));
@@ -718,28 +770,96 @@ export default function SankeyCanvas() {
                         break;
                     }
 
-                    y -= 6;
-                    bounds = createLabelBounds(x, y, anchor, placement, nameText, valueText, nameSize, valueSize);
                     attempts += 1;
-                }
-            } else if (placement === 'left' || placement === 'right' || placement === 'external') {
-                let attempts = 0;
-                while (attempts < 12) {
-                    const collidesLabel = placedBounds.some((entry: LabelBounds) => intersects(bounds, entry));
-                    if (!collidesLabel) {
-                        break;
+
+                    if (placement === 'above') {
+                        y = originalY - attempts * 6;
+                    } else {
+                        const distance = Math.ceil(attempts / 2) * 6;
+                        y = originalY + (attempts % 2 === 0 ? distance : -distance);
                     }
 
-                    y += 6;
-                    bounds = createLabelBounds(x, y, anchor, placement, nameText, valueText, nameSize, valueSize);
-                    attempts += 1;
+                    bounds = createLabelBounds(
+                        x,
+                        y,
+                        anchor,
+                        placement,
+                        nameText,
+                        valueText,
+                        comparisonText,
+                        nameSize,
+                        valueSize,
+                        comparisonSize,
+                    );
                 }
+            }
+
+            if (bounds.x0 < padding.left) {
+                const delta = padding.left - bounds.x0;
+                x += delta;
+                bounds = createLabelBounds(
+                    x,
+                    y,
+                    anchor,
+                    placement,
+                    nameText,
+                    valueText,
+                    comparisonText,
+                    nameSize,
+                    valueSize,
+                    comparisonSize,
+                );
+            }
+
+            if (bounds.x1 > width - padding.right) {
+                const delta = bounds.x1 - (width - padding.right);
+                x -= delta;
+                bounds = createLabelBounds(
+                    x,
+                    y,
+                    anchor,
+                    placement,
+                    nameText,
+                    valueText,
+                    comparisonText,
+                    nameSize,
+                    valueSize,
+                    comparisonSize,
+                );
             }
 
             if (bounds.y0 < padding.top) {
                 const delta = padding.top - bounds.y0;
                 y += delta;
-                bounds = createLabelBounds(x, y, anchor, placement, nameText, valueText, nameSize, valueSize);
+                bounds = createLabelBounds(
+                    x,
+                    y,
+                    anchor,
+                    placement,
+                    nameText,
+                    valueText,
+                    comparisonText,
+                    nameSize,
+                    valueSize,
+                    comparisonSize,
+                );
+            }
+
+            if (bounds.y1 > height - padding.bottom) {
+                const delta = bounds.y1 - (height - padding.bottom);
+                y -= delta;
+                bounds = createLabelBounds(
+                    x,
+                    y,
+                    anchor,
+                    placement,
+                    nameText,
+                    valueText,
+                    comparisonText,
+                    nameSize,
+                    valueSize,
+                    comparisonSize,
+                );
             }
 
             placedBounds.push(bounds);
@@ -750,10 +870,54 @@ export default function SankeyCanvas() {
                 anchor,
                 nameText,
                 valueText,
+                comparisonText,
                 nameSize,
                 valueSize,
+                comparisonSize,
             });
         });
+
+        const selectedLink = selectedLinkIndex !== null
+            ? links.find((link: any) => link.index === selectedLinkIndex) || null
+            : null;
+
+        const getLinkOpacity = (link: any) => {
+            if (selectedNodeId) {
+                return link.source.id === selectedNodeId || link.target.id === selectedNodeId ? settings.linkOpacity : 0.25;
+            }
+
+            if (selectedLink) {
+                const touchesSelectedNodes =
+                    link.source.id === selectedLink.source.id ||
+                    link.target.id === selectedLink.source.id ||
+                    link.source.id === selectedLink.target.id ||
+                    link.target.id === selectedLink.target.id;
+
+                if (link.index === selectedLink.index) {
+                    return settings.linkOpacity;
+                }
+
+                return touchesSelectedNodes ? Math.max(0.4, settings.linkOpacity * 0.9) : 0.25;
+            }
+
+            return settings.linkOpacity;
+        };
+
+        const getNodeOpacity = (node: any) => {
+            if (selectedNodeId) {
+                return node.id === selectedNodeId ? 1 : 0.25;
+            }
+
+            if (selectedLink) {
+                return node.id === selectedLink.source.id || node.id === selectedLink.target.id ? 1 : 0.25;
+            }
+
+            return 1;
+        };
+
+        const getLabelOpacity = (node: any) => {
+            return getNodeOpacity(node);
+        };
 
 
         // Link Join
@@ -778,10 +942,10 @@ export default function SankeyCanvas() {
 
         // Style Transition (Opacity/Color)
         linkUpdate.transition('style').duration(500)
-            .attr('opacity', settings.linkOpacity)
+            .attr('opacity', (d: any) => getLinkOpacity(d))
             .style('mix-blend-mode', settings.linkBlendMode || 'normal')
             .attr('fill', 'none')
-            .attr('stroke-width', (d: any) => Math.max(0.8, d.width))
+            .attr('stroke-width', (d: any) => Math.max(1, Number(d.width) || 0))
             .attr('stroke-linecap', 'butt')
             .attr('stroke-linejoin', 'round')
             .style('pointer-events', 'stroke')
@@ -815,7 +979,7 @@ export default function SankeyCanvas() {
                 linkLayer.selectAll('.sankey-link')
                     .transition('style')
                     .duration(120)
-                    .attr('opacity', settings.linkOpacity);
+                    .attr('opacity', (linkD: any) => getLinkOpacity(linkD));
                 setStatusText('Click on any element to edit it');
                 hideTooltip();
             })
@@ -853,7 +1017,7 @@ export default function SankeyCanvas() {
 
         // Style Transition
         nodeUpdate.transition('style').duration(500)
-            .attr('opacity', 1);
+            .attr('opacity', (d: any) => getNodeOpacity(d));
 
         nodeUpdate.select('rect')
             .transition('layout').duration(750).ease(d3.easeCubicInOut)
@@ -873,13 +1037,15 @@ export default function SankeyCanvas() {
                 d3.select(this).select('rect').attr('fill-opacity', Math.min(1, settings.nodeOpacity + 0.08));
                 linkLayer.selectAll('.sankey-link')
                     .attr('opacity', (linkD: any) =>
-                        linkD.source.id === d.id || linkD.target.id === d.id ? 0.8 : settings.linkOpacity,
+                        linkD.source.id === d.id || linkD.target.id === d.id
+                            ? 0.8
+                            : Math.min(0.25, getLinkOpacity(linkD)),
                     );
             })
             .on('mouseleave', function () {
                 setStatusText('Click on any element to edit it');
                 d3.select(this).select('rect').attr('fill-opacity', settings.nodeOpacity);
-                linkLayer.selectAll('.sankey-link').attr('opacity', settings.linkOpacity);
+                linkLayer.selectAll('.sankey-link').attr('opacity', (linkD: any) => getLinkOpacity(linkD));
             });
 
 
@@ -888,7 +1054,7 @@ export default function SankeyCanvas() {
             .filter((e) => !e.ctrlKey && !e.button) // Only left-click, no Ctrl
             .subject((e, d) => ({ x: d.x0, y: d.y0 }))
             .on('start', function (e, d) {
-                d3.select(this).raise().attr('cursor', 'grabbing');
+                d3.select(this).raise().attr('cursor', 'grabbing').style('will-change', 'transform');
                 (d as any)._dragStartX = e.x; (d as any)._dragStartY = e.y;
                 (d as any)._dragStartTime = Date.now();
                 (d as any)._dragFrameCount = 0;
@@ -984,6 +1150,7 @@ export default function SankeyCanvas() {
 
                 d3.select(this)
                     .attr('cursor', 'grab')
+                    .style('will-change', null)
                     .transition()
                     .duration(100)
                     .ease(d3.easeQuadOut);
@@ -1020,110 +1187,25 @@ export default function SankeyCanvas() {
 
         const labelUpdate = labelEnter.merge(labelSel as any);
 
-        // V11: Label Drag Handler (for repositioning)
         const labelDrag = d3.drag<SVGTextElement, any>()
-            .on('start', function (e, d) {
+            .on('start', function (e) {
+                e.sourceEvent?.stopPropagation();
                 d3.select(this).raise().attr('cursor', 'grabbing');
-                setStatusText('Drag to move, double-click to reset');
-                // Store initial position
-                const transform = d3.select(this).attr('transform');
-                const match = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
-                if (match) {
-                    (d as any)._labelDragStartX = parseFloat(match[1]);
-                    (d as any)._labelDragStartY = parseFloat(match[2]);
-                } else {
-                    (d as any)._labelDragStartX = 0;
-                    (d as any)._labelDragStartY = 0;
-                }
-                (d as any)._dragTime = Date.now();
+                setStatusText('Drag to reposition label');
             })
             .on('drag', function (e, d) {
-                // V12-style requestAnimationFrame for smooth dragging
-                if ((d as any)._labelDragFrame) cancelAnimationFrame((d as any)._labelDragFrame);
-
-                (d as any)._labelDragFrame = requestAnimationFrame(() => {
-                    // Update visual position immediately
-                    d3.select(this).attr('transform', `translate(${e.x}, ${e.y})`);
-
-                    // Store temp position
-                    (d as any)._tempLabelX = e.x;
-                    (d as any)._tempLabelY = e.y;
-                });
+                d3.select(this).attr('transform', `translate(${e.x}, ${e.y})`);
+                (d as any)._tempLabelX = e.x;
+                (d as any)._tempLabelY = e.y;
             })
-            .on('end', function (e, d) {
-                if ((d as any)._labelDragFrame) {
-                    cancelAnimationFrame((d as any)._labelDragFrame);
-                    (d as any)._labelDragFrame = null;
-                }
-
+            .on('end', function (_e, d) {
                 d3.select(this).attr('cursor', 'grab');
 
-                // Calculate offset from original position
-                const finalX = (d as any)._tempLabelX || (d as any)._labelDragStartX || 0;
-                const finalY = (d as any)._tempLabelY || (d as any)._labelDragStartY || 0;
+                const finalX = Number((d as any)._tempLabelX);
+                const finalY = Number((d as any)._tempLabelY);
 
-                const deltaX = finalX - ((d as any)._labelDragStartX || 0);
-                const deltaY = finalY - ((d as any)._labelDragStartY || 0);
-
-                // Only save if actually dragged (not just clicked)
-                const dragDuration = Date.now() - ((d as any)._dragTime || 0);
-                const dragDistance = Math.hypot(deltaX, deltaY);
-
-                if (dragDuration > 100 && dragDistance > 3) {
-                    const nodeWidth = d.x1 - d.x0;
-                    const isLeftSide = d.x0 < width / 2;
-                    const snapAnchors = {
-                        above: { x: d.x0 + nodeWidth / 2, y: d.y0 - labelAboveOffset },
-                        below: { x: d.x0 + nodeWidth / 2, y: d.y1 + labelBelowOffset },
-                        left: { x: d.x0 - labelSideOffset, y: (d.y0 + d.y1) / 2 },
-                        right: { x: d.x1 + labelSideOffset, y: (d.y0 + d.y1) / 2 },
-                        inside: { x: d.x0 + nodeWidth / 2, y: (d.y0 + d.y1) / 2 },
-                        external: { x: isLeftSide ? d.x0 - labelSideOffset : d.x1 + labelSideOffset, y: (d.y0 + d.y1) / 2 },
-                    };
-
-                    let nearestPlacement: keyof typeof snapAnchors = 'above';
-                    let nearestDistance = Number.POSITIVE_INFINITY;
-
-                    (Object.keys(snapAnchors) as Array<keyof typeof snapAnchors>).forEach((placement) => {
-                        const anchor = snapAnchors[placement];
-                        const dist = Math.hypot(finalX - anchor.x, finalY - anchor.y);
-                        if (dist < nearestDistance) {
-                            nearestDistance = dist;
-                            nearestPlacement = placement;
-                        }
-                    });
-
-                    if (nearestDistance <= 22) {
-                        dispatch({
-                            type: 'UPDATE_NODE_CUSTOMIZATION',
-                            payload: {
-                                nodeId: d.id,
-                                updates: {
-                                    labelPlacement: nearestPlacement,
-                                    labelOffsetX: 0,
-                                    labelOffsetY: 0,
-                                },
-                            },
-                        });
-                        return;
-                    }
-
-                    // Get existing customization
-                    const existing = getCustomization(d.id);
-                    const currentOffsetX = (existing?.labelOffsetX as number) || 0;
-                    const currentOffsetY = (existing?.labelOffsetY as number) || 0;
-
-                    // Save cumulative offset
-                    dispatch({
-                        type: 'UPDATE_NODE_CUSTOMIZATION',
-                        payload: {
-                            nodeId: d.id,
-                            updates: {
-                                labelOffsetX: currentOffsetX + deltaX,
-                                labelOffsetY: currentOffsetY + deltaY
-                            }
-                        }
-                    });
+                if (Number.isFinite(finalX) && Number.isFinite(finalY)) {
+                    dispatch({ type: 'MOVE_LABEL', payload: { nodeId: d.id, x: finalX, y: finalY } });
                 }
 
                 setStatusText('Click on any element to edit it');
@@ -1134,13 +1216,21 @@ export default function SankeyCanvas() {
             .style('pointer-events', 'all')  // Enable dragging
             .style('cursor', 'grab')
             .on('mouseenter', function () {
-                setStatusText('Drag to move, double-click to reset');
+                setStatusText('Drag to reposition label');
             })
             .on('mouseleave', function () {
                 setStatusText('Click on any element to edit it');
             })
             .on('dblclick', function (e, d: any) {
                 e.stopPropagation();
+                dispatch({
+                    type: 'UPDATE_LAYOUT',
+                    payload: {
+                        id: d.id,
+                        type: 'label',
+                    },
+                });
+
                 dispatch({
                     type: 'UPDATE_NODE_CUSTOMIZATION',
                     payload: {
@@ -1156,7 +1246,7 @@ export default function SankeyCanvas() {
 
         // Appear/Disappear
         labelUpdate.transition('style').duration(500)
-            .attr('opacity', 1);
+            .attr('opacity', (d: any) => getLabelOpacity(d));
 
         // Move with transition
         labelUpdate.transition('layout').duration(750).ease(d3.easeCubicInOut)
@@ -1203,6 +1293,17 @@ export default function SankeyCanvas() {
                         .attr('font-size', layout.valueSize)
                         .attr('font-weight', 400)
                         .attr('fill', '#6b7280');
+                }
+
+                if (layout.comparisonText) {
+                    text.append('tspan')
+                        .attr('x', 0)
+                        .attr('dy', '1.15em')
+                        .text(layout.comparisonText)
+                        .attr('font-family', 'Inter, sans-serif')
+                        .attr('font-size', layout.comparisonSize)
+                        .attr('font-weight', 400)
+                        .attr('fill', '#94a3b8');
                 }
             });
 
@@ -1371,7 +1472,24 @@ export default function SankeyCanvas() {
             svg.on('click', null); // Cleanup click listener
         };
 
-    }, [data, settings, selectedNodeId, state.customLayout, state.independentLabels, state.selectedLabelId, studioState.currentTool, dispatch, getNodeColor, formatValue, getCustomization, handleNodeClick, setTool]);
+    }, [
+        data,
+        settings,
+        selectedNodeId,
+        selectedLinkIndex,
+        state.annotationBoxes,
+        state.customLayout,
+        state.independentLabels,
+        state.selectedLabelId,
+        studioState.currentTool,
+        drawingBox,
+        dispatch,
+        getNodeColor,
+        formatValue,
+        getCustomization,
+        handleNodeClick,
+        setTool,
+    ]);
 
     return (
         <div ref={containerRef} className="w-full h-full bg-white border border-slate-200 overflow-hidden relative">
@@ -1386,6 +1504,9 @@ export default function SankeyCanvas() {
             />
             <div className="absolute bottom-2 left-3 pointer-events-none select-none text-[11px] text-slate-400 bg-white/70 px-2 py-0.5 rounded">
                 {statusText}
+            </div>
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none select-none text-[10px] text-slate-300">
+                created with SankeyCapCap Studio
             </div>
             {/* Top Toolbar */}
             {/* Top Toolbar - REMOVED (Handled by Toolbar component) */}

@@ -14,10 +14,10 @@ const THEME_PRESETS = {
     standard: {
         name: 'Standard',
         settings: {
-            nodeWidth: 24,
+            nodeWidth: 18,
             linkCurvature: 0.5,
             linkOpacity: 0.38,
-            nodePadding: 20,
+            nodePadding: 30,
             labelPosition: 'auto' as const,
         }
     },
@@ -840,6 +840,40 @@ export default function AppearanceTab() {
                                 min={0}
                                 max={50}
                                 className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-gray-100 space-y-3">
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="block text-xs font-medium text-[var(--secondary-text)]">Node Width</label>
+                                <span className="text-[10px] text-gray-500 font-mono">{settings.nodeWidth}px</span>
+                            </div>
+                            <input
+                                type="range"
+                                value={settings.nodeWidth}
+                                onChange={(e) => updateSetting('nodeWidth', Number(e.target.value))}
+                                min={8}
+                                max={40}
+                                step={2}
+                                className="w-full"
+                            />
+                        </div>
+
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="block text-xs font-medium text-[var(--secondary-text)]">Node Spacing</label>
+                                <span className="text-[10px] text-gray-500 font-mono">{settings.nodePadding}px</span>
+                            </div>
+                            <input
+                                type="range"
+                                value={settings.nodePadding}
+                                onChange={(e) => updateSetting('nodePadding', Number(e.target.value))}
+                                min={10}
+                                max={80}
+                                step={5}
+                                className="w-full"
                             />
                         </div>
                     </div>
