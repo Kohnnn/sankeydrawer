@@ -797,6 +797,15 @@ export default function AppearanceTab() {
                         <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
                             <input
                                 type="checkbox"
+                                checked={settings.enableFocusMode}
+                                onChange={(e) => updateSetting('enableFocusMode', e.target.checked)}
+                                className="rounded border-gray-300 text-blue-500"
+                            />
+                            Focus Mode (Dim Others)
+                        </label>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                            <input
+                                type="checkbox"
                                 checked={settings.showMiniMap}
                                 onChange={(e) => updateSetting('showMiniMap', e.target.checked)}
                                 className="rounded border-gray-300 text-blue-500"
@@ -826,8 +835,8 @@ export default function AppearanceTab() {
                                 type="number"
                                 value={settings.nodeWidth}
                                 onChange={(e) => updateSetting('nodeWidth', Number(e.target.value))}
-                                min={5}
-                                max={100}
+                                min={8}
+                                max={40}
                                 className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
                             />
                         </div>
@@ -837,8 +846,8 @@ export default function AppearanceTab() {
                                 type="number"
                                 value={settings.nodePadding}
                                 onChange={(e) => updateSetting('nodePadding', Number(e.target.value))}
-                                min={0}
-                                max={50}
+                                min={10}
+                                max={80}
                                 className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
                             />
                         </div>

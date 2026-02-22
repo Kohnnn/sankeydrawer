@@ -1,10 +1,11 @@
 'use client';
 
+/* eslint-disable react-hooks/set-state-in-effect */
+
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Plus, Trash2, Copy, AlertCircle } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useDiagram } from '@/context/DiagramContext';
-import { parseDSL, parseNumber } from '@/lib/dsl-parser';
-import { SankeyLink } from '@/types/sankey';
+import { parseNumber } from '@/lib/dsl-parser';
 
 interface GridRow {
     source: string;
@@ -18,7 +19,6 @@ interface GridRow {
 export default function SpreadsheetEditor() {
     const { state, dispatch } = useDiagram();
     const [rows, setRows] = useState<GridRow[]>([]);
-    const [focusedCell, setFocusedCell] = useState<{ row: number; col: 'source' | 'target' | 'value' } | null>(null);
 
     // specific helper to update data ONLY when blurred or Enter pressed to avoid excessive re-renders
     const commitChanges = useCallback((currentRows: GridRow[]) => {
@@ -143,7 +143,7 @@ export default function SpreadsheetEditor() {
         commitChanges(rows);
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent, index: number, field: string) => {
+    const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
             e.preventDefault();
             // Commit immediately
@@ -209,8 +209,6 @@ export default function SpreadsheetEditor() {
             newRows.pop();
         }
 
-        let addedCount = 0;
-
         lines.forEach(line => {
             if (!line.trim()) return;
 
@@ -263,7 +261,6 @@ export default function SpreadsheetEditor() {
                     comparison: '',
                     isValid: true
                 });
-                addedCount++;
             }
         });
 
@@ -295,13 +292,13 @@ export default function SpreadsheetEditor() {
         : null;
 
     return (
-        <div className="flex flex-col h-full bg-white  font-sans">
+        <div className="flex flex-col h-full bg-white  font-sans" onPaste={handlePaste}>
             {/* Header */}
             <div className="grid grid-cols-[1fr_1fr_100px_100px_40px] gap-0 border-b border-gray-200  bg-white  sticky top-0 z-10">
                 <div className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-gray-100 ">From</div>
                 <div className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-gray-100 ">To</div>
                 <div className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-gray-100 ">Amount</div>
-                <div className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Previous / Comp</div>
+                <div className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Comparison</div>
                 <div className="px-2 py-3"></div>
             </div>
 
@@ -329,7 +326,7 @@ export default function SpreadsheetEditor() {
                                     onChange={(e) => handleCellChange(i, 'source', e.target.value)}
                                     onFocus={() => handleFocus(i)}
                                     onBlur={handleBlur}
-                                    onKeyDown={(e) => handleKeyDown(e, i, 'source')}
+                                    onKeyDown={handleKeyDown}
                                     placeholder="Source Node"
                                     className="w-full h-full px-4 py-3 text-sm text-gray-900  bg-transparent outline-none focus:bg-blue-50/20"
                                 />
@@ -343,7 +340,7 @@ export default function SpreadsheetEditor() {
                                     onChange={(e) => handleCellChange(i, 'target', e.target.value)}
                                     onFocus={() => handleFocus(i)}
                                     onBlur={handleBlur}
-                                    onKeyDown={(e) => handleKeyDown(e, i, 'target')}
+                                    onKeyDown={handleKeyDown}
                                     placeholder="Target Node"
                                     className="w-full h-full px-4 py-3 text-sm text-gray-900  bg-transparent outline-none focus:bg-blue-50/20"
                                 />
@@ -357,7 +354,7 @@ export default function SpreadsheetEditor() {
                                     onChange={(e) => handleCellChange(i, 'value', e.target.value)}
                                     onFocus={() => handleFocus(i)}
                                     onBlur={(e) => handleValueBlur(i, e.target.value)}
-                                    onKeyDown={(e) => handleKeyDown(e, i, 'value')}
+                                    onKeyDown={handleKeyDown}
                                     placeholder="0 or 1k"
                                     className="w-full h-full px-4 py-3 text-sm text-gray-900  bg-transparent outline-none focus:bg-blue-50/20"
                                 />
@@ -371,7 +368,7 @@ export default function SpreadsheetEditor() {
                                     onChange={(e) => handleCellChange(i, 'comparison', e.target.value)}
                                     onFocus={() => handleFocus(i)}
                                     onBlur={handleBlur}
-                                    onKeyDown={(e) => handleKeyDown(e, i, 'comparison')}
+                                    onKeyDown={handleKeyDown}
                                     placeholder="Value OR %"
                                     className="w-full h-full px-4 py-3 text-sm text-green-600  font-medium bg-transparent outline-none focus:bg-blue-50/20 placeholder-gray-300"
                                 />

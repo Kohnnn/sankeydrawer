@@ -269,7 +269,7 @@ export const defaultSettings: DiagramSettings = {
   showGrid: false,
   snapToGrid: false,  // Free movement by default (SankeyArt style)
   gridSize: 20,
-  enableFocusMode: false,
+  enableFocusMode: true,
   showMiniMap: false,
   showLegend: false,
   legendPosition: 'top-right',

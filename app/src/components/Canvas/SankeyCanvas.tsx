@@ -40,8 +40,8 @@ export default function SankeyCanvas() {
     const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
     const [editText, setEditText] = useState('');
 
-    // Annotation drawing state
-    const [drawingBox, setDrawingBox] = useState<{
+    // Annotation drawing state (ref-based to avoid full re-render on pointer move)
+    const drawingBoxRef = useRef<{
         startX: number;
         startY: number;
         currentX: number;
@@ -295,6 +295,26 @@ export default function SankeyCanvas() {
 
         const { nodes, links } = processedGraph;
 
+        const clampNodeToExtent = (node: any) => {
+            const nodeWidth = node.x1 - node.x0;
+            const nodeHeight = node.y1 - node.y0;
+            const minX = extent[0][0];
+            const maxX = extent[1][0];
+            const minY = extent[0][1];
+            const maxY = extent[1][1];
+
+            const clampedX = Math.max(minX, Math.min(Math.max(minX, maxX - nodeWidth), node.x0));
+            const clampedY = Math.max(minY, Math.min(Math.max(minY, maxY - nodeHeight), node.y0));
+
+            node.x0 = clampedX;
+            node.x1 = clampedX + nodeWidth;
+            node.y0 = clampedY;
+            node.y1 = clampedY + nodeHeight;
+        };
+
+        nodes.forEach((node: any) => clampNodeToExtent(node));
+        sankeyGenerator.update(processedGraph);
+
         // Custom Layout Override
         if (state.customLayout && state.customLayout.nodes) {
             nodes.forEach((node: any) => {
@@ -302,17 +322,13 @@ export default function SankeyCanvas() {
                 if (customPos) {
                     const nW = node.x1 - node.x0;
                     const nH = node.y1 - node.y0;
-                    const minX = extent[0][0];
-                    const maxX = extent[1][0];
-                    const minY = extent[0][1];
-                    const maxY = extent[1][1];
-                    const clampedX = Math.max(minX, Math.min(Math.max(minX, maxX - nW), customPos.x));
-                    const clampedY = Math.max(minY, Math.min(Math.max(minY, maxY - nH), customPos.y));
 
-                    node.x0 = clampedX;
-                    node.x1 = clampedX + nW;
-                    node.y0 = clampedY;
-                    node.y1 = clampedY + nH;
+                    node.x0 = customPos.x;
+                    node.x1 = customPos.x + nW;
+                    node.y0 = customPos.y;
+                    node.y1 = customPos.y + nH;
+
+                    clampNodeToExtent(node);
                 }
             });
             sankeyGenerator.update(processedGraph);
@@ -463,22 +479,6 @@ export default function SankeyCanvas() {
             .attr('fill', (d: any) => d.borderColor || '#dc2626')
             .text((d: any) => d.label || '');
 
-        // Drawing Preview
-        annotationLayer.select('.drawing-preview').remove();
-        if (drawingBox) {
-            annotationLayer.append('rect')
-                .attr('class', 'drawing-preview')
-                .attr('x', Math.min(drawingBox.startX, drawingBox.currentX))
-                .attr('y', Math.min(drawingBox.startY, drawingBox.currentY))
-                .attr('width', Math.abs(drawingBox.currentX - drawingBox.startX))
-                .attr('height', Math.abs(drawingBox.currentY - drawingBox.startY))
-                .attr('fill', 'rgba(59, 130, 246, 0.1)')
-                .attr('stroke', '#3b82f6')
-                .attr('stroke-width', 2)
-                .attr('stroke-dasharray', '4 2')
-                .attr('rx', 4);
-        }
-
         // --- Tooltip ---
         let tooltip = d3.select('body').select<HTMLDivElement>('.sankey-tooltip');
         if (tooltip.empty()) {
@@ -496,7 +496,23 @@ export default function SankeyCanvas() {
 
         // --- Links ---
         const linkPathGenerator = sankeyLinkHorizontal<any, any>();
-        const getLinkPath = (d: any) => linkPathGenerator(d) ?? '';
+        const getLinkPath = (d: any) => {
+            const sx = Number(d.source.x1);
+            const sy = Number(d.y0);
+            const tx = Number(d.target.x0);
+            const ty = Number(d.y1);
+
+            if (!Number.isFinite(sx) || !Number.isFinite(sy) || !Number.isFinite(tx) || !Number.isFinite(ty)) {
+                return linkPathGenerator(d) ?? '';
+            }
+
+            const curvature = Math.max(0.15, Math.min(0.85, settings.linkCurvature || 0.5));
+            const interpolateX = d3.interpolateNumber(sx, tx);
+            const controlX1 = interpolateX(curvature);
+            const controlX2 = interpolateX(1 - curvature);
+
+            return `M${sx},${sy}C${controlX1},${sy} ${controlX2},${ty} ${tx},${ty}`;
+        };
 
         const getGradientId = (sourceId: string, targetId: string, linkIndex?: number) => {
             const encodeSegment = (value: string) =>
@@ -878,10 +894,30 @@ export default function SankeyCanvas() {
         });
 
         const selectedLink = selectedLinkIndex !== null
-            ? links.find((link: any) => link.index === selectedLinkIndex) || null
+            ? links.find((link: any) => link.index === selectedLinkIndex) ?? links[selectedLinkIndex] ?? null
             : null;
 
+        const selectedNodeConnectedIds = new Set<string>();
+        if (selectedNodeId) {
+            selectedNodeConnectedIds.add(selectedNodeId);
+
+            links.forEach((link: any) => {
+                if (link.source.id === selectedNodeId) {
+                    selectedNodeConnectedIds.add(link.target.id);
+                }
+                if (link.target.id === selectedNodeId) {
+                    selectedNodeConnectedIds.add(link.source.id);
+                }
+            });
+        }
+
+        const focusModeEnabled = settings.enableFocusMode ?? true;
+
         const getLinkOpacity = (link: any) => {
+            if (!focusModeEnabled) {
+                return settings.linkOpacity;
+            }
+
             if (selectedNodeId) {
                 return link.source.id === selectedNodeId || link.target.id === selectedNodeId ? settings.linkOpacity : 0.25;
             }
@@ -904,8 +940,12 @@ export default function SankeyCanvas() {
         };
 
         const getNodeOpacity = (node: any) => {
+            if (!focusModeEnabled) {
+                return 1;
+            }
+
             if (selectedNodeId) {
-                return node.id === selectedNodeId ? 1 : 0.25;
+                return selectedNodeConnectedIds.has(node.id) ? 1 : 0.25;
             }
 
             if (selectedLink) {
@@ -1385,17 +1425,42 @@ export default function SankeyCanvas() {
         svg.on('mousedown', (event) => {
             if (studioState.currentTool !== 'annotate') return;
             const [x, y] = d3.pointer(event, mainGroup.node());
-            setDrawingBox({ startX: x, startY: y, currentX: x, currentY: y });
+            drawingBoxRef.current = { startX: x, startY: y, currentX: x, currentY: y };
+
+            annotationLayer.select('.drawing-preview').remove();
+            annotationLayer.append('rect')
+                .attr('class', 'drawing-preview')
+                .attr('x', x)
+                .attr('y', y)
+                .attr('width', 0)
+                .attr('height', 0)
+                .attr('fill', 'rgba(59, 130, 246, 0.1)')
+                .attr('stroke', '#3b82f6')
+                .attr('stroke-width', 2)
+                .attr('stroke-dasharray', '4 2')
+                .attr('rx', 4)
+                .style('pointer-events', 'none');
         });
 
         svg.on('mousemove', (event) => {
-            if (!drawingBox) return;
+            if (!drawingBoxRef.current) return;
+
             const [x, y] = d3.pointer(event, mainGroup.node());
-            setDrawingBox(prev => prev ? { ...prev, currentX: x, currentY: y } : null);
+
+            drawingBoxRef.current.currentX = x;
+            drawingBoxRef.current.currentY = y;
+
+            annotationLayer.select<SVGRectElement>('.drawing-preview')
+                .attr('x', Math.min(drawingBoxRef.current.startX, x))
+                .attr('y', Math.min(drawingBoxRef.current.startY, y))
+                .attr('width', Math.abs(x - drawingBoxRef.current.startX))
+                .attr('height', Math.abs(y - drawingBoxRef.current.startY));
         });
 
         svg.on('mouseup', () => {
+            const drawingBox = drawingBoxRef.current;
             if (!drawingBox) return;
+
             const x = Math.min(drawingBox.startX, drawingBox.currentX);
             const y = Math.min(drawingBox.startY, drawingBox.currentY);
             const width = Math.abs(drawingBox.currentX - drawingBox.startX);
@@ -1415,7 +1480,9 @@ export default function SankeyCanvas() {
                     }
                 });
             }
-            setDrawingBox(null);
+
+            drawingBoxRef.current = null;
+            annotationLayer.select('.drawing-preview').remove();
             setTool('select');
         });
 
@@ -1470,6 +1537,9 @@ export default function SankeyCanvas() {
 
         return () => {
             svg.on('click', null); // Cleanup click listener
+            svg.on('mousedown', null);
+            svg.on('mousemove', null);
+            svg.on('mouseup', null);
         };
 
     }, [
@@ -1482,7 +1552,6 @@ export default function SankeyCanvas() {
         state.independentLabels,
         state.selectedLabelId,
         studioState.currentTool,
-        drawingBox,
         dispatch,
         getNodeColor,
         formatValue,
