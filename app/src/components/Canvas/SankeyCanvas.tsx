@@ -5,25 +5,20 @@ import * as d3 from 'd3';
 import { sankey } from 'd3-sankey';
 import { useDiagram } from '@/context/DiagramContext';
 import { useStudio } from '@/context/StudioContext';
-import { SankeyNode, NodeCustomization, IndependentLabel } from '@/types/sankey';
+import { SankeyNode, NodeCustomization } from '@/types/sankey';
 import NodeEditPopover from './NodeEditPopover';
 import MiniMap from './MiniMap';
-import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Undo, Redo, Download, Image as ImageIcon } from 'lucide-react';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 // Semantic colors
 const COLORS: Record<string, string> = {
-    revenue: '#22c55e',
-    expense: '#ef4444',
-    profit: '#3b82f6',
-    neutral: '#6b7280',
+    revenue: '#00a34c',
+    expense: '#d1003f',
+    profit: '#00a34c',
+    neutral: '#94a3b8',
 };
 
-// Particle Geometry
-const PARTICLE_SIZE = 3;
-const PARTICLE_TRAIL = 6;
-
-const PALETTE = d3.schemeCategory10;
+const PALETTE = d3.schemeTableau10;
 
 interface PopoverState {
     node: SankeyNode;
@@ -35,8 +30,9 @@ export default function SankeyCanvas() {
     const containerRef = useRef<HTMLDivElement>(null);
     const { state, dispatch } = useDiagram();
     const { state: studioState, dispatch: studioDispatch, setTool } = useStudio();
-    const { data, settings, selectedNodeId, selectedLinkIndex, nodeCustomizations, independentLabels, annotationBoxes } = state;
+    const { data, settings, selectedNodeId, nodeCustomizations } = state;
     const [popover, setPopover] = useState<PopoverState | null>(null);
+    const [statusText, setStatusText] = useState('Click on any element to edit it');
 
     // In-place editing state
     const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -64,6 +60,13 @@ export default function SankeyCanvas() {
         if (customization?.fillColor) return customization.fillColor;
         if (node.color) return node.color;
         if (node.category && COLORS[node.category]) return COLORS[node.category];
+
+        const outgoingCount = node.sourceLinks?.length ?? 0;
+        const incomingCount = node.targetLinks?.length ?? 0;
+        if (outgoingCount > 0 && incomingCount === 0) return COLORS.revenue;
+        if (incomingCount > 0 && outgoingCount === 0) return COLORS.expense;
+        if (incomingCount > 0 && outgoingCount > 0) return COLORS.profit;
+
         return PALETTE[index % PALETTE.length];
     }, [getCustomization]);
 
@@ -73,21 +76,22 @@ export default function SankeyCanvas() {
 
         if (!forceDisplay && valueMode === 'hidden') return '';
 
+        const decimals = valueDecimals === -1 ? 2 : valueDecimals;
         let formatted: string;
         if (valueMode === 'short') {
             if (value >= 1_000_000_000) {
-                formatted = (value / 1_000_000_000).toFixed(valueDecimals) + 'B';
+                formatted = (value / 1_000_000_000).toFixed(decimals) + 'B';
             } else if (value >= 1_000_000) {
-                formatted = (value / 1_000_000).toFixed(valueDecimals) + 'M';
+                formatted = (value / 1_000_000).toFixed(decimals) + 'M';
             } else if (value >= 1_000) {
-                formatted = (value / 1_000).toFixed(valueDecimals) + 'K';
+                formatted = (value / 1_000).toFixed(decimals) + 'K';
             } else {
-                formatted = value.toFixed(valueDecimals);
+                formatted = value.toFixed(decimals);
             }
         } else {
             formatted = value.toLocaleString('en-US', {
-                minimumFractionDigits: valueDecimals,
-                maximumFractionDigits: valueDecimals
+                minimumFractionDigits: valueDecimals === -1 ? 0 : valueDecimals,
+                maximumFractionDigits: valueDecimals === -1 ? 20 : valueDecimals
             });
         }
 
@@ -118,6 +122,9 @@ export default function SankeyCanvas() {
         const width = settings.width;
         const height = settings.height;
         const { padding } = settings;
+        const labelSideOffset = 6;
+        const labelAboveOffset = 6;
+        const labelBelowOffset = 6;
 
         // --- Setup Main Group & Layers (One-time setup) ---
         let mainGroup = svg.select<SVGGElement>('g.main-group');
@@ -144,29 +151,6 @@ export default function SankeyCanvas() {
         let defs = svg.select<SVGDefsElement>('defs');
         if (defs.empty()) {
             defs = svg.insert('defs', ':first-child');
-
-            // 1. Drop Shadow for Nodes (Softer)
-            const shadow = defs.append('filter')
-                .attr('id', 'node-shadow')
-                .attr('height', '130%');
-            shadow.append('feGaussianBlur').attr('in', 'SourceAlpha').attr('stdDeviation', 2).attr('result', 'blur');
-            shadow.append('feOffset').attr('in', 'blur').attr('dx', 1).attr('dy', 1).attr('result', 'offsetBlur');
-
-            // Soften shadow alpha
-            const transfer = shadow.append('feComponentTransfer').attr('in', 'offsetBlur').attr('result', 'softShadow');
-            transfer.append('feFuncA').attr('type', 'linear').attr('slope', '0.2');
-
-            const feMerge = shadow.append('feMerge');
-            feMerge.append('feMergeNode').attr('in', 'softShadow');
-            feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
-
-
-            // 2. Gloss Gradient (Subtle 3D effect)
-            const gloss = defs.append('linearGradient')
-                .attr('id', 'node-gloss')
-                .attr('x1', '0%').attr('y1', '0%').attr('x2', '0%').attr('y2', '100%');
-            gloss.append('stop').attr('offset', '0%').attr('stop-color', 'white').attr('stop-opacity', 0.15);
-            gloss.append('stop').attr('offset', '100%').attr('stop-color', 'white').attr('stop-opacity', 0);
         }
 
         // Update Grid Pattern
@@ -198,7 +182,7 @@ export default function SankeyCanvas() {
 
         // --- Data Handling ---
         if (!data.nodes.length || !data.links.length) {
-            mainGroup.selectAll('.layer-links, .layer-nodes, .layer-labels, .layer-particles').transition().duration(500).attr('opacity', 0).remove();
+            mainGroup.selectAll('.layer-links, .layer-nodes, .layer-labels').transition().duration(500).attr('opacity', 0).remove();
             // Empty message...
             const emptyMsg = svg.selectAll('.empty-message').data([1]);
             emptyMsg.enter().append('text')
@@ -230,7 +214,7 @@ export default function SankeyCanvas() {
 
         if (validLinks.length === 0 && data.links.length > 0) {
             // Links exist but none are valid - show empty message
-            mainGroup.selectAll('.layer-links, .layer-nodes, .layer-labels, .layer-particles').transition().duration(500).attr('opacity', 0).remove();
+            mainGroup.selectAll('.layer-links, .layer-nodes, .layer-labels').transition().duration(500).attr('opacity', 0).remove();
             const emptyMsg = svg.selectAll('.empty-message').data([1]);
             emptyMsg.enter().append('text')
                 .attr('class', 'empty-message')
@@ -277,11 +261,9 @@ export default function SankeyCanvas() {
         };
         // Creation Order = Z-Index
         const linkLayer = getLayer('layer-links');
-        const particleLayer = getLayer('layer-particles'); // New Layer
         const nodeLayer = getLayer('layer-nodes');
         const labelLayer = getLayer('layer-labels');
         const guideLayer = getLayer('layer-guides');
-        const leaderLayer = getLayer('layer-leaders');
         const annotationLayer = getLayer('layer-annotations');
         const logoLayer = getLayer('layer-logo');
         const legendLayer = getLayer('layer-legend');
@@ -320,8 +302,8 @@ export default function SankeyCanvas() {
             const legendWidth = 120;
             const legendHeight = legendItems.length * itemHeight + 16;
 
-            let startX = pos.includes('right') ? width - legendWidth - 20 : 20;
-            let startY = pos.includes('bottom') ? height - legendHeight - 20 : 20;
+            const startX = pos.includes('right') ? width - legendWidth - 20 : 20;
+            const startY = pos.includes('bottom') ? height - legendHeight - 20 : 20;
 
             const legendG = legendLayer.append('g')
                 .attr('transform', `translate(${startX}, ${startY})`);
@@ -415,39 +397,6 @@ export default function SankeyCanvas() {
                 .attr('rx', 4);
         }
 
-        // --- Leader Lines for External Labels (V7: Always show for external) ---
-        leaderLayer.selectAll('*').remove();
-        if (settings.labelPosition === 'external') {
-            const leaderData = nodes.map((d: any) => {
-                const isLeft = d.x0 < width / 2;
-                const midY = (d.y0 + d.y1) / 2;
-                return {
-                    id: d.id,
-                    x1: isLeft ? d.x0 - 4 : d.x1 + 4,
-                    x2: isLeft ? d.x0 - 75 : d.x1 + 75, // V10: Extended from 55 to 75 for clearer labels
-                    y1: midY,
-                    y2: midY,
-                };
-            });
-
-            const leaderSel = leaderLayer.selectAll('.leader-line')
-                .data(leaderData, (d: any) => d.id);
-
-            leaderSel.enter()
-                .append('line')
-                .attr('class', 'leader-line')
-                .merge(leaderSel as any)
-                .attr('x1', (d: any) => d.x1)
-                .attr('x2', (d: any) => d.x2)
-                .attr('y1', (d: any) => d.y1)
-                .attr('y2', (d: any) => d.y2)
-                .attr('stroke', settings.leaderLineColor || '#9ca3af')
-                .attr('stroke-width', settings.leaderLineWidth || 1)
-                .attr('stroke-dasharray', '2 2')  // Dashed for professional look
-                .attr('opacity', 0.6)
-                .attr('stroke-linecap', 'round');
-        }
-
         // --- Tooltip ---
         let tooltip = d3.select('body').select<HTMLDivElement>('.sankey-tooltip');
         if (tooltip.empty()) {
@@ -463,128 +412,126 @@ export default function SankeyCanvas() {
         }
         function hideTooltip() { tooltip.style('visibility', 'hidden'); }
 
-        const tLayout = svg.transition('layout').duration(750 as any).ease(d3.easeCubicInOut);
-        const tStyle = svg.transition('style').duration(500 as any).ease(d3.easeLinear);
-
         // --- Links ---
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const smoothLinkPath = (d: any) => {
-            const curveStyle = settings.linkCurveStyle || 'organic';
-            let curvature = settings.linkCurvature ?? 0.5;
-
             const sx = d.source.x1;
             const tx = d.target.x0;
             const sy0 = d.y0;
             const ty1 = d.y1;
-            const w = d.width / 2;
 
-            if (curveStyle === 'sharp') {
-                // Right angles
-                const mx = (sx + tx) / 2;
-                return `M ${sx},${sy0 - w} L ${mx},${sy0 - w} L ${mx},${ty1 - w} L ${tx},${ty1 - w} L ${tx},${ty1 + w} L ${mx},${ty1 + w} L ${mx},${sy0 + w} L ${sx},${sy0 + w} Z`;
+            const gap = Math.max(1, tx - sx);
+            const curveLength = Math.min(gap * 0.28, 84);
+            const flatStartX = sx + curveLength;
+            const flatEndX = tx - curveLength;
+            const midY = (sy0 + ty1) / 2;
+
+            if (flatEndX <= flatStartX + 2) {
+                const c1 = sx + gap * 0.4;
+                const c2 = tx - gap * 0.4;
+                return `M ${sx},${sy0} C ${c1},${sy0} ${c2},${ty1} ${tx},${ty1}`;
             }
 
-            if (curveStyle === 'organic') {
-                // SankeyArt-style S-curves with easing
-                const dx = tx - sx;
-                const dy = ty1 - sy0;
+            return [
+                `M ${sx},${sy0}`,
+                `C ${sx + curveLength * 0.35},${sy0} ${flatStartX - curveLength * 0.2},${midY} ${flatStartX},${midY}`,
+                `L ${flatEndX},${midY}`,
+                `C ${flatEndX + curveLength * 0.2},${midY} ${tx - curveLength * 0.35},${ty1} ${tx},${ty1}`,
+            ].join(' ');
+        };
 
-                const tension = 0.4 + (curvature * 0.3);
-                const cpx1 = sx + dx * tension;
-                const cpx2 = tx - dx * tension;
+        const getGradientId = (sourceId: string, targetId: string) => {
+            const encodeSegment = (value: string) =>
+                Array.from(value)
+                    .map((char) => char.charCodeAt(0).toString(16).padStart(2, '0'))
+                    .join('');
 
-                const cpyOffset = Math.min(Math.abs(dy) * 0.1, 20);
-                const cpy1 = sy0 + (dy > 0 ? cpyOffset : -cpyOffset);
-                const cpy2 = ty1 - (dy > 0 ? cpyOffset : -cpyOffset);
-
-                return `M ${sx},${sy0 - w} C ${cpx1},${cpy1 - w} ${cpx2},${cpy2 - w} ${tx},${ty1 - w} L ${tx},${ty1 + w} C ${cpx2},${cpy2 + w} ${cpx1},${cpy1 + w} ${sx},${sy0 + w} Z`;
-            }
-
-            // Default: geometric
-            curvature = Math.min(0.5, curvature);
-            const dx = Math.max(1, tx - sx);
-            const dy = ty1 - sy0;
-            const ratio = dx / (Math.abs(dy) + 0.1);
-            if (ratio < 1) curvature = 0.5 - (0.5 - curvature) * Math.sqrt(ratio);
-
-            const xi = d3.interpolateNumber(sx, tx);
-            const x2 = xi(curvature), x3 = xi(1 - curvature);
-
-            return `M ${sx},${sy0 - w} C ${x2},${sy0 - w} ${x3},${ty1 - w} ${tx},${ty1 - w} L ${tx},${ty1 + w} C ${x3},${ty1 + w} ${x2},${sy0 + w} ${sx},${sy0 + w} Z`
-                .replace(/\s+/g, ' ').trim();
+            return `grad-${encodeSegment(sourceId)}-${encodeSegment(targetId)}`;
         };
 
         // Gradients
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         links.forEach((l: any) => {
-            const id = `grad-${l.source.id}-${l.target.id}`;
+            const id = getGradientId(l.source.id, l.target.id);
             let g = defs.select<SVGLinearGradientElement>('#' + id);
             if (g.empty()) {
                 g = defs.append('linearGradient').attr('id', id).attr('gradientUnits', 'userSpaceOnUse');
                 g.append('stop').attr('offset', '0%').attr('class', 's');
-                g.append('stop').attr('offset', '50%').attr('class', 'm'); // Mid point
                 g.append('stop').attr('offset', '100%').attr('class', 't');
             }
-            g.attr('x1', l.source.x1).attr('x2', l.target.x0);
+            g.attr('x1', l.source.x1)
+                .attr('y1', l.y0)
+                .attr('x2', l.target.x0)
+                .attr('y2', l.y1);
 
             const sourceColor = l.source.flowColor || getNodeColor(l.source, 0);
             const targetColor = getNodeColor(l.target, 0);
-            const gradType = settings.linkGradientType || 'source-to-target';
-
-            if (gradType === 'both-ends') {
-                g.select('.s').attr('stop-color', sourceColor).attr('stop-opacity', 1);
-                g.select('.m').attr('stop-color', d3.interpolateRgb(sourceColor, targetColor)(0.5)).attr('stop-opacity', 0.6);
-                g.select('.t').attr('stop-color', targetColor).attr('stop-opacity', 1);
-            } else {
-                g.select('.s').attr('stop-color', sourceColor).attr('stop-opacity', 1);
-                g.select('.m').attr('stop-color', d3.interpolateRgb(sourceColor, targetColor)(0.5)).attr('stop-opacity', 1);
-                g.select('.t').attr('stop-color', targetColor).attr('stop-opacity', 1);
-            }
+            g.select('.m').remove();
+            g.select('.s').attr('stop-color', sourceColor).attr('stop-opacity', 1);
+            g.select('.t').attr('stop-color', targetColor).attr('stop-opacity', 1);
         });
 
-        // Focus Mode Logic (Path Tracing)
-        const connectedIds = new Set<string>();
-        const connectedLinks = new Set<string>();
+        const getAutoPlacement = (node: any): 'left' | 'right' | 'above' => {
+            const incoming = node.targetLinks?.length ?? 0;
+            const outgoing = node.sourceLinks?.length ?? 0;
+            if (incoming === 0 && outgoing > 0) return 'left';
+            if (outgoing === 0 && incoming > 0) return 'right';
+            return 'above';
+        };
 
-        if (selectedNodeId) {
-            // Traverse Upstream
-            const traverseUp = (nId: string) => {
-                connectedIds.add(nId);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                links.forEach((l: any) => {
-                    if (l.target.id === nId) {
-                        connectedLinks.add(`${l.source.id}-${l.target.id}`);
-                        if (!connectedIds.has(l.source.id)) traverseUp(l.source.id);
-                    }
-                });
-            };
-            // Traverse Downstream
-            const traverseDown = (nId: string) => {
-                connectedIds.add(nId);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                links.forEach((l: any) => {
-                    if (l.source.id === nId) {
-                        connectedLinks.add(`${l.source.id}-${l.target.id}`);
-                        if (!connectedIds.has(l.target.id)) traverseDown(l.target.id);
-                    }
-                });
-            };
-
-            traverseUp(selectedNodeId);
-            traverseDown(selectedNodeId);
-        }
-
-        const isDimmed = (nId?: string, linkKey?: string) => {
-            if (!settings.enableFocusMode) return false;
-            if (!selectedNodeId && selectedLinkIndex === null) return false;
-            // Link Hover takes precedence
-            if (selectedLinkIndex !== null) return true; // Handled by hover logic
-            // Node Selection Focus
-            if (selectedNodeId) {
-                if (nId && !connectedIds.has(nId)) return true;
-                if (linkKey && !connectedLinks.has(linkKey)) return true;
+        const resolvePlacement = (node: any, custom?: NodeCustomization) => {
+            if (custom?.labelPlacement && custom.labelPlacement !== 'auto') {
+                return custom.labelPlacement;
             }
-            return false;
+
+            if (settings.labelPosition === 'auto') {
+                return getAutoPlacement(node);
+            }
+
+            if (settings.labelPosition === 'external') {
+                return node.x0 < width / 2 ? 'left' : 'right';
+            }
+
+            return settings.labelPosition;
+        };
+
+        const getLabelCoordinates = (node: any, custom?: NodeCustomization) => {
+            const nodeWidth = node.x1 - node.x0;
+            const placement = resolvePlacement(node, custom);
+
+            let x = node.x0 + nodeWidth / 2;
+            let y = (node.y0 + node.y1) / 2;
+
+            if (placement === 'above') {
+                y = node.y0 - labelAboveOffset;
+            } else if (placement === 'below') {
+                y = node.y1 + labelBelowOffset;
+            } else if (placement === 'left') {
+                x = node.x0 - labelSideOffset;
+            } else if (placement === 'right') {
+                x = node.x1 + labelSideOffset;
+            } else if (placement === 'external') {
+                x = node.x0 < width / 2 ? node.x0 - labelSideOffset : node.x1 + labelSideOffset;
+            }
+
+            x += custom?.labelOffsetX || 0;
+            y += custom?.labelOffsetY || 0;
+
+            return { x, y, placement };
+        };
+
+        const getLabelAnchor = (node: any, placement: string) => {
+            if (placement === 'left') return 'end';
+            if (placement === 'right') return 'start';
+            if (placement === 'external') return node.x0 < width / 2 ? 'end' : 'start';
+            return 'middle';
+        };
+
+        const shouldUseLabelHalo = (node: any, placement: string) => {
+            const incoming = node.targetLinks?.length ?? 0;
+            const outgoing = node.sourceLinks?.length ?? 0;
+            const isMiddleNode = incoming > 0 && outgoing > 0;
+            return placement === 'inside' || (placement === 'above' && isMiddleNode);
         };
 
 
@@ -600,6 +547,7 @@ export default function SankeyCanvas() {
         const linkEnter = linkSel.enter().append('path')
             .attr('class', 'sankey-link cursor-pointer')
             .attr('d', smoothLinkPath) // Start at correct position
+            .attr('fill', 'none')
             .attr('opacity', 0);
 
         const linkUpdate = linkEnter.merge(linkSel as any);
@@ -610,130 +558,55 @@ export default function SankeyCanvas() {
 
         // Style Transition (Opacity/Color)
         linkUpdate.transition('style').duration(500)
-            .attr('opacity', ((d: any, i: number) => {
-                // Hover overrides everything
-                if (selectedLinkIndex !== null) return selectedLinkIndex === links.indexOf(d) ? 0.9 : 0.1;
-                // Focus Mode
-                if (isDimmed(undefined, `${d.source.id}-${d.target.id}`)) return 0.1;
-                return settings.linkOpacity;
-            }) as any)
+            .attr('opacity', settings.linkOpacity)
             .style('mix-blend-mode', settings.linkBlendMode || 'normal')
-            .attr('fill', (d: any) => {
+            .attr('fill', 'none')
+            .attr('stroke-width', (d: any) => Math.max(0.8, d.width))
+            .attr('stroke-linecap', 'round')
+            .attr('stroke-linejoin', 'round')
+            .style('pointer-events', 'stroke')
+            .attr('stroke', (d: any) => {
                 // Smart Financial Theme
                 if (settings.useFinancialTheme) {
                     const sourceCategory = d.source.category;
-                    if (sourceCategory === 'revenue') return '#10b981'; // Green
-                    if (sourceCategory === 'expense') return '#ef4444'; // Red
-                    if (sourceCategory === 'profit') return '#3b82f6';  // Blue
-                    return '#6b7280'; // Neutral gray
+                    if (sourceCategory === 'revenue') return COLORS.revenue;
+                    if (sourceCategory === 'expense') return COLORS.expense;
+                    if (sourceCategory === 'profit') return COLORS.profit;
+                    return COLORS.neutral;
                 }
 
                 // Original logic
-                return settings.linkGradient ? `url(#grad-${d.source.id}-${d.target.id})` : (d.source.flowColor || getNodeColor(d.source, 0));
+                return settings.linkGradient
+                    ? `url(#${getGradientId(d.source.id, d.target.id)})`
+                    : (d.source.flowColor || getNodeColor(d.source, 0));
             });
-
-
-
-        // --- Particles System ---
-        particleLayer.selectAll('*').remove(); // Clear previous
-        if (settings.showParticles) {
-            // ... (Keep existing particle logic, it rebuilds every frame anyway)
-            // For brevity, I'm assuming particle logic is re-instantiated or we can just leave it as is.
-            // But wait, the previous code block included particles in the middle. I should be careful not to delete logic I'm not viewing.
-            // The view showed lines 386+. I am replacing only up to 483.
-            // My replacement content ends before particles logic starts?
-            // Actually, I need to check line numbers.
-            // View was 150-400. And 450-550.
-            // My replacement targets lines 275-483 (approx).
-            // Wait, I need to be precise.
-
-            // The StartLine I am aiming for is `275`.
-            // The EndLine is `483`.
-
-            // BUT, I need to make sure I don't delete the particle logic which starts around line 386.
-            // I see `particleLayer` logic in my viewing history around line 386.
-            // So I MUST include the particle logic in the ReplacementContent OR split the edit.
-
-            // Splitting is safer. 
-            // Chunk 1: Links (Lines 275 - 383)
-            // Chunk 2: Nodes (Lines 456 - 483)
-        }
-
-
-
-        // --- Particles System ---
-        particleLayer.selectAll('*').remove(); // Clear previous
-        if (settings.showParticles) {
-            const particleData: any[] = [];
-            // Generate particles based on flow value
-            links.forEach((link: any, i: number) => {
-                const pathBuffer = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                pathBuffer.setAttribute('d', smoothLinkPath(link));
-                const length = pathBuffer.getTotalLength();
-
-                // Density: more particles for wider links, but capped
-                const count = Math.min(20, Math.max(3, Math.floor(link.value / d3.max(links, (l: any) => l.value) * 15)));
-
-                for (let j = 0; j < count; j++) {
-                    particleData.push({
-                        linkIndex: i,
-                        path: pathBuffer,
-                        length: length,
-                        offset: Math.random() * length, // Random start
-                        speed: (1 + Math.random()) * (settings.particleSpeed || 1) * 2 // Var speed
-                    });
-                }
-            });
-
-            // Particles
-            const particles = particleLayer.selectAll('.particle')
-                .data(particleData)
-                .enter().append('circle')
-                .attr('class', 'particle')
-                .attr('r', PARTICLE_SIZE)
-                .attr('fill', 'white')
-                .attr('opacity', 0.6)
-                .attr('pointer-events', 'none');
-
-            // Animation Loop
-            const timer = d3.timer((elapsed) => {
-                particles.attr('transform', function (d: any) {
-                    d.offset += d.speed;
-                    if (d.offset > d.length) d.offset = 0;
-                    const p = d.path.getPointAtLength(d.offset);
-                    return `translate(${p.x},${p.y})`;
-                });
-            });
-
-            // Cleanup timer on re-render
-            (svg.node() as any).__particleTimer = timer;
-        } else {
-            if ((svg.node() as any).__particleTimer) ((svg.node() as any).__particleTimer as d3.Timer).stop();
-        }
 
         // Interaction
         linkLayer.selectAll('.sankey-link')
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .on('mouseenter', function (e, d: any) {
-                if (selectedLinkIndex === null) {
-                    d3.select(this).transition('style').duration(200).attr('opacity', 0.8);
-                    const formatted = formatValue(d.value, true);
-
-                    // Calculate percentage of source node's total output
-                    const sourceOutputTotal = d.source.sourceLinks?.reduce((sum: number, link: any) => sum + link.value, 0) || d.value;
-                    const percentage = sourceOutputTotal > 0 ? ((d.value / sourceOutputTotal) * 100).toFixed(1) : '0';
-
-                    showTooltip(e, `${d.source.name} → ${d.target.name}${formatted ? `: ${formatted}` : ''} (${percentage}%)`);
-                }
+                d3.select(this).transition('style').duration(120).attr('opacity', 0.8);
+                const formatted = formatValue(d.value, true);
+                const sourceOutputTotal = d.source.sourceLinks?.reduce((sum: number, link: any) => sum + link.value, 0) || d.value;
+                const percentage = sourceOutputTotal > 0 ? ((d.value / sourceOutputTotal) * 100).toFixed(1) : '0';
+                setStatusText('Click to inspect flow value');
+                showTooltip(e, `${d.source.name} → ${d.target.name}${formatted ? `: ${formatted}` : ''} (${percentage}%)`);
             })
             .on('mouseleave', function () {
-                if (selectedLinkIndex === null) {
-                    linkLayer.selectAll('.sankey-link').transition('style').duration(200).attr('opacity', settings.linkOpacity);
-                    hideTooltip();
-                }
+                linkLayer.selectAll('.sankey-link')
+                    .transition('style')
+                    .duration(120)
+                    .attr('opacity', settings.linkOpacity);
+                setStatusText('Click on any element to edit it');
+                hideTooltip();
             })
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .on('click', (e, d: any) => dispatch({ type: 'SELECT_LINK', payload: links.indexOf(d) }));
+            .on('click', (e, d: any) => {
+                e.stopPropagation();
+                dispatch({ type: 'SELECT_LINK', payload: links.indexOf(d) });
+                const formatted = formatValue(d.value, true);
+                showTooltip(e, `${d.source.name} → ${d.target.name}${formatted ? `: ${formatted}` : ''}`);
+            });
 
 
         // --- Nodes ---
@@ -744,7 +617,7 @@ export default function SankeyCanvas() {
         nodeSel.exit().transition('style').duration(500).attr('opacity', 0).remove();
 
         const nodeEnter = nodeSel.enter().append('g')
-            .attr('class', 'sankey-node cursor-pointer')
+            .attr('class', 'sankey-node cursor-grab')
             .attr('opacity', 0)
             .attr('transform', (d: any) => `translate(${d.x0},${d.y0})`); // Start at correct pos
 
@@ -763,7 +636,7 @@ export default function SankeyCanvas() {
 
         // Style Transition
         nodeUpdate.transition('style').duration(500)
-            .attr('opacity', (d: any) => isDimmed(d.id) ? 0.1 : 1);
+            .attr('opacity', 1);
 
         nodeUpdate.select('rect')
             .transition('layout').duration(750).ease(d3.easeCubicInOut)
@@ -772,7 +645,25 @@ export default function SankeyCanvas() {
             .attr('width', (d: any) => d.x1 - d.x0)
             .attr('height', (d: any) => d.y1 - d.y0)
             .attr('fill', (d: any, i) => getNodeColor(d, i))
-            .style('filter', 'none');  // Remove any shadow filter
+            .attr('fill-opacity', settings.nodeOpacity)
+            .attr('stroke', 'none')
+            .attr('stroke-opacity', 0)
+            .attr('stroke-width', 0);
+
+        nodeUpdate
+            .on('mouseenter', function (_e, d: any) {
+                setStatusText('Click to edit, drag to move');
+                d3.select(this).select('rect').attr('fill-opacity', Math.min(1, settings.nodeOpacity + 0.08));
+                linkLayer.selectAll('.sankey-link')
+                    .attr('opacity', (linkD: any) =>
+                        linkD.source.id === d.id || linkD.target.id === d.id ? 0.8 : settings.linkOpacity,
+                    );
+            })
+            .on('mouseleave', function () {
+                setStatusText('Click on any element to edit it');
+                d3.select(this).select('rect').attr('fill-opacity', settings.nodeOpacity);
+                linkLayer.selectAll('.sankey-link').attr('opacity', settings.linkOpacity);
+            });
 
 
         // Drag (V12: Optimized for 60fps with requestAnimationFrame)
@@ -785,6 +676,10 @@ export default function SankeyCanvas() {
                 (d as any)._dragStartX = e.x; (d as any)._dragStartY = e.y;
                 (d as any)._dragStartTime = Date.now();
                 (d as any)._dragFrameCount = 0;
+                setStatusText('Click to edit, drag to move');
+                linkLayer.selectAll('.sankey-link').interrupt();
+                nodeLayer.selectAll('.sankey-node').interrupt();
+                labelLayer.selectAll('.sankey-label').interrupt();
             })
             .on('drag', function (e, d) {
                 // V12: Use requestAnimationFrame for smooth 60fps updates
@@ -815,100 +710,45 @@ export default function SankeyCanvas() {
                     (d as any)._tempX = newX;
                     (d as any)._tempY = newY;
 
-                    // Throttle expensive operations to every 3rd frame for smoothness
+                    // Throttle guide drawing, but keep flow geometry updates every frame
                     (d as any)._dragFrameCount++;
                     if ((d as any)._dragFrameCount % 3 === 0) {
-                        // Snap-to-Align Guides
                         guideLayer.selectAll('*').remove();
 
-                        if (!settings.snapToGrid) {
-                            const alignThreshold = 5;
-                            const guides: { type: 'h' | 'v', value: number }[] = [];
-
-                            // Find alignment guides
-                            nodes.forEach((node: any) => {
-                                if (node.id === d.id) return;
-
-                                // Vertical alignment (x-axis)
-                                const xPositions = [
-                                    node.x0,                        // Left edge
-                                    (node.x0 + node.x1) / 2,       // Center
-                                    node.x1                         // Right edge
-                                ];
-                                const dragXPositions = [
-                                    newX,                           // Left edge
-                                    newX + w / 2,                   // Center
-                                    newX + w                        // Right edge
-                                ];
-
-                                xPositions.forEach((nodeX, i) => {
-                                    dragXPositions.forEach((dragX, j) => {
-                                        if (Math.abs(nodeX - dragX) < alignThreshold) {
-                                            guides.push({ type: 'v', value: nodeX });
-                                            // Snap to alignment
-                                            if (j === 0) newX = nodeX;               // Align left
-                                            else if (j === 1) newX = nodeX - w / 2;  // Align center
-                                            else newX = nodeX - w;                   // Align right
-                                        }
-                                    });
-                                });
-
-                                // Horizontal alignment (y-axis)
-                                const yPositions = [
-                                    node.y0,                        // Top edge
-                                    (node.y0 + node.y1) / 2,       // Center
-                                    node.y1                         // Bottom edge
-                                ];
-                                const dragYPositions = [
-                                    newY,                           // Top edge
-                                    newY + h / 2,                   // Center
-                                    newY + h                        // Bottom edge
-                                ];
-
-                                yPositions.forEach((nodeY, i) => {
-                                    dragYPositions.forEach((dragY, j) => {
-                                        if (Math.abs(nodeY - dragY) < alignThreshold) {
-                                            guides.push({ type: 'h', value: nodeY });
-                                        }
-                                    });
-                                });
-                            });
-
-                            // Draw guides
-                            guides.forEach(guide => {
-                                if (guide.type === 'v') {
-                                    guideLayer.append('line')
-                                        .attr('x1', guide.value).attr('x2', guide.value)
-                                        .attr('y1', 0).attr('y2', height)
-                                        .attr('stroke', '#3b82f6')
-                                        .attr('stroke-width', 1)
-                                        .attr('stroke-dasharray', '4 2');
-                                } else {
-                                    guideLayer.append('line')
-                                        .attr('x1', 0).attr('x2', width)
-                                        .attr('y1', guide.value).attr('y2', guide.value)
-                                        .attr('stroke', '#3b82f6')
-                                        .attr('stroke-width', 1)
-                                        .attr('stroke-dasharray', '4 2');
-                                }
-                            });
-                        } else {
-                            // Original grid snap guide
+                        if (settings.snapToGrid) {
                             guideLayer.append('line').attr('x1', newX + w / 2).attr('x2', newX + w / 2).attr('y1', 0).attr('y2', height)
                                 .attr('stroke', '#3b82f6').attr('stroke-dasharray', '4 2');
                         }
 
-                        // Update links and labels every 3rd frame instead of every frame
-                        d.x0 = newX; d.x1 = newX + w; d.y0 = newY; d.y1 = newY + h;
-                        sankeyGenerator.update(processedGraph);
-
-                        linkLayer.selectAll('.sankey-link')
-                            .attr('d', smoothLinkPath);
-
-                        labelLayer.selectAll('.sankey-label')
-                            .filter((labelD: any) => labelD.id === d.id)
-                            .attr('transform', `translate(${(d.x0 + d.x1) / 2}, ${(d.y0 + d.y1) / 2})`);
                     }
+
+                    const previousY = d.y0;
+                    const deltaY = newY - previousY;
+                    d.x0 = newX;
+                    d.x1 = newX + w;
+                    d.y0 = newY;
+                    d.y1 = newY + h;
+
+                    if (deltaY !== 0) {
+                        (d.sourceLinks || []).forEach((link: any) => {
+                            link.y0 += deltaY;
+                        });
+                        (d.targetLinks || []).forEach((link: any) => {
+                            link.y1 += deltaY;
+                        });
+                    }
+
+                    linkLayer.selectAll('.sankey-link')
+                        .filter((linkD: any) => linkD.source.id === d.id || linkD.target.id === d.id)
+                        .attr('d', smoothLinkPath);
+
+                    labelLayer.selectAll('.sankey-label')
+                        .filter((labelD: any) => labelD.id === d.id)
+                        .attr('transform', () => {
+                            const custom = getCustomization(d.id);
+                            const coords = getLabelCoordinates(d, custom);
+                            return `translate(${coords.x}, ${coords.y})`;
+                        });
                 });
             })
             .on('end', function (e, d) {
@@ -930,14 +770,16 @@ export default function SankeyCanvas() {
 
                 // Smooth transition to final link positions
                 linkLayer.selectAll('.sankey-link')
+                    .filter((linkD: any) => linkD.source.id === d.id || linkD.target.id === d.id)
                     .transition().duration(150).ease(d3.easeQuadOut)
                     .attr('d', smoothLinkPath);
 
                 d3.select(this)
-                    .attr('cursor', 'pointer')
+                    .attr('cursor', 'grab')
                     .transition()
                     .duration(100)
                     .ease(d3.easeQuadOut);
+                setStatusText('Click on any element to edit it');
 
                 const dist = Math.hypot(e.x - (d as any)._dragStartX, e.y - (d as any)._dragStartY);
                 if (dist < 3 && (Date.now() - (d as any)._dragStartTime < 500)) {
@@ -975,6 +817,7 @@ export default function SankeyCanvas() {
         const labelDrag = d3.drag<SVGTextElement, any>()
             .on('start', function (e, d) {
                 d3.select(this).raise().attr('cursor', 'grabbing');
+                setStatusText('Drag to move, double-click to reset');
                 // Store initial position
                 const transform = d3.select(this).attr('transform');
                 const match = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
@@ -1020,6 +863,44 @@ export default function SankeyCanvas() {
                 const dragDistance = Math.hypot(deltaX, deltaY);
 
                 if (dragDuration > 100 && dragDistance > 3) {
+                    const nodeWidth = d.x1 - d.x0;
+                    const isLeftSide = d.x0 < width / 2;
+                    const snapAnchors = {
+                        above: { x: d.x0 + nodeWidth / 2, y: d.y0 - labelAboveOffset },
+                        below: { x: d.x0 + nodeWidth / 2, y: d.y1 + labelBelowOffset },
+                        left: { x: d.x0 - labelSideOffset, y: (d.y0 + d.y1) / 2 },
+                        right: { x: d.x1 + labelSideOffset, y: (d.y0 + d.y1) / 2 },
+                        inside: { x: d.x0 + nodeWidth / 2, y: (d.y0 + d.y1) / 2 },
+                        external: { x: isLeftSide ? d.x0 - labelSideOffset : d.x1 + labelSideOffset, y: (d.y0 + d.y1) / 2 },
+                    };
+
+                    let nearestPlacement: keyof typeof snapAnchors = 'above';
+                    let nearestDistance = Number.POSITIVE_INFINITY;
+
+                    (Object.keys(snapAnchors) as Array<keyof typeof snapAnchors>).forEach((placement) => {
+                        const anchor = snapAnchors[placement];
+                        const dist = Math.hypot(finalX - anchor.x, finalY - anchor.y);
+                        if (dist < nearestDistance) {
+                            nearestDistance = dist;
+                            nearestPlacement = placement;
+                        }
+                    });
+
+                    if (nearestDistance <= 22) {
+                        dispatch({
+                            type: 'UPDATE_NODE_CUSTOMIZATION',
+                            payload: {
+                                nodeId: d.id,
+                                updates: {
+                                    labelPlacement: nearestPlacement,
+                                    labelOffsetX: 0,
+                                    labelOffsetY: 0,
+                                },
+                            },
+                        });
+                        return;
+                    }
+
                     // Get existing customization
                     const existing = getCustomization(d.id);
                     const currentOffsetX = (existing?.labelOffsetX as number) || 0;
@@ -1037,12 +918,34 @@ export default function SankeyCanvas() {
                         }
                     });
                 }
+
+                setStatusText('Click on any element to edit it');
             });
 
         // Apply drag handler and enable pointer events
         labelUpdate.call(labelDrag)
             .style('pointer-events', 'all')  // Enable dragging
-            .style('cursor', 'grab');
+            .style('cursor', 'grab')
+            .on('mouseenter', function () {
+                setStatusText('Drag to move, double-click to reset');
+            })
+            .on('mouseleave', function () {
+                setStatusText('Click on any element to edit it');
+            })
+            .on('dblclick', function (e, d: any) {
+                e.stopPropagation();
+                dispatch({
+                    type: 'UPDATE_NODE_CUSTOMIZATION',
+                    payload: {
+                        nodeId: d.id,
+                        updates: {
+                            labelPlacement: 'auto',
+                            labelOffsetX: 0,
+                            labelOffsetY: 0,
+                        },
+                    },
+                });
+            });
 
         // Appear/Disappear
         labelUpdate.transition('style').duration(500)
@@ -1051,108 +954,59 @@ export default function SankeyCanvas() {
         // Move with transition
         labelUpdate.transition('layout').duration(750).ease(d3.easeCubicInOut)
             .attr('transform', (d: any) => {
-                const nodeWidth = d.x1 - d.x0;
-                const nodeHeight = d.y1 - d.y0;
-
-                // Get customization
                 const custom = getCustomization(d.id);
-                const placement = custom?.labelPlacement || 'auto';
-
-                let x = 0;
-                let y = 0;
-
-                // V11: Placement mode logic
-                switch (placement) {
-                    case 'above':
-                        x = d.x0 + nodeWidth / 2;
-                        y = d.y0 - 20;  // 20px above node
-                        break;
-                    case 'below':
-                        x = d.x0 + nodeWidth / 2;
-                        y = d.y1 + 20;  // 20px below node
-                        break;
-                    case 'left':
-                        x = d.x0 - 80;
-                        y = (d.y0 + d.y1) / 2;
-                        break;
-                    case 'right':
-                        x = d.x1 + 80;
-                        y = (d.y0 + d.y1) / 2;
-                        break;
-                    case 'inside':
-                        x = d.x0 + nodeWidth / 2;
-                        y = (d.y0 + d.y1) / 2;
-                        break;
-                    case 'auto':
-                    default:
-                        // Smart auto-placement: left side for left nodes, right for right
-                        // Falls back to global settings.labelPosition if no custom placement
-                        const pos = settings.labelPosition;
-
-                        if (pos === 'external') {
-                            const isLeft = d.x0 < width / 2;
-                            x = isLeft ? d.x0 - 80 : d.x1 + 80;
-                            y = (d.y0 + d.y1) / 2;
-                        } else if (pos === 'inside') {
-                            x = d.x0 + nodeWidth / 2;
-                            y = (d.y0 + d.y1) / 2;
-                        } else if (pos === 'right') {
-                            x = d.x1 + 6;
-                            y = (d.y0 + d.y1) / 2;
-                        } else {
-                            x = d.x0 - 6;
-                            y = (d.y0 + d.y1) / 2;
-                        }
-                        break;
-                }
-
-                // Apply custom offset (from drag-and-drop)
-                x += custom?.labelOffsetX || 0;
-                y += custom?.labelOffsetY || 0;
-
-                return `translate(${x}, ${y})`;
+                const coords = getLabelCoordinates(d, custom);
+                return `translate(${coords.x}, ${coords.y})`;
             })
             .each(function (d: any) {
                 const text = d3.select(this);
                 text.text(null); // Clear previous
 
                 const custom = getCustomization(d.id);
-                const pos = settings.labelPosition;
+                const { placement } = getLabelCoordinates(d, custom);
 
                 // Determine Alignment
-                let align = 'start';
-                if (pos === 'inside') align = 'middle';
-                else {
-                    // Auto-detect based on canvas side
-                    align = (d.x0 < width / 2) ? 'start' : 'end';
-                }
+                let align: 'start' | 'middle' | 'end' = getLabelAnchor(d, placement);
 
                 // Override
-                if (custom?.labelAlignment) align = custom.labelAlignment === 'left' ? 'start' : custom.labelAlignment === 'right' ? 'end' : 'middle';
+                if (custom?.labelAlignment) {
+                    align = custom.labelAlignment === 'left' ? 'start' : custom.labelAlignment === 'right' ? 'end' : 'middle';
+                }
 
                 text.attr('text-anchor', align);
+                const useHalo = shouldUseLabelHalo(d, placement);
+                text.attr('paint-order', 'stroke')
+                    .attr('stroke', useHalo ? 'rgba(255,255,255,0.9)' : 'none')
+                    .attr('stroke-width', useHalo ? 3 : 0)
+                    .attr('stroke-linejoin', 'round');
+
+                const line1Size = custom?.labelFontSize ?? settings.labelFontSize;
+                const line2Size = Math.max(10, Math.round(line1Size - 1));
 
                 // Line 1: Name
-                const nameTspan = text.append('tspan')
+                text.append('tspan')
                     .attr('x', 0)
-                    .attr('dy', pos === 'inside' ? '-0.8em' : '-0.4em') // If inside, shift up to make room
+                    .attr('dy', placement === 'inside' ? '-0.2em' : '0em')
                     .text(custom?.labelText || d.name)
-                    .attr('font-weight', (custom?.labelBold ?? settings.labelBold) ? 'bold' : 'normal')
+                    .attr('font-weight', (custom?.labelBold ?? settings.labelBold) ? 700 : 600)
                     .attr('font-style', (custom?.labelItalic ?? settings.labelItalic) ? 'italic' : 'normal')
                     .attr('font-family', custom?.labelFontFamily ?? settings.labelFontFamily)
-                    .attr('font-size', custom?.labelFontSize ?? settings.labelFontSize)
-                    .attr('fill', custom?.labelColor || '#1f2937'); // Fixed light mode adapt
-
+                    .attr('font-size', line1Size)
+                    .attr('fill', custom?.labelColor || '#1f2937');
+                
 
                 // Line 2: Value
-                const valueTspan = text.append('tspan')
-                    .attr('x', 0)
-                    .attr('dy', '1.2em')
-                    .text(formatValue(d.value))
-                    .attr('font-family', custom?.labelFontFamily ?? settings.labelFontFamily)
-                    .attr('font-size', (custom?.labelFontSize ?? settings.labelFontSize) * 0.9) // Slightly smaller
-                    .attr('font-weight', 'normal')
-                    .attr('fill', custom?.valueColor || '#6b7280');
+                const formattedValue = formatValue(d.value);
+                if (formattedValue) {
+                    text.append('tspan')
+                        .attr('x', 0)
+                        .attr('dy', '1.15em')
+                        .text(formattedValue)
+                        .attr('font-family', custom?.labelFontFamily ?? settings.labelFontFamily)
+                        .attr('font-size', line2Size)
+                        .attr('font-weight', 400)
+                        .attr('fill', custom?.valueColor || '#6b7280');
+                }
 
 
                 // Line 3: Custom Text (e.g. "+12%")
@@ -1243,7 +1097,7 @@ export default function SankeyCanvas() {
             .on('start', function () {
                 d3.select(this).raise();
             })
-            .on('drag', function (e, d) {
+            .on('drag', function (e) {
                 d3.select(this).attr('transform', `translate(${e.x},${e.y})`);
             })
             .on('end', function (e, d) {
@@ -1270,7 +1124,7 @@ export default function SankeyCanvas() {
             setDrawingBox(prev => prev ? { ...prev, currentX: x, currentY: y } : null);
         });
 
-        svg.on('mouseup', (event) => {
+        svg.on('mouseup', () => {
             if (!drawingBox) return;
             const x = Math.min(drawingBox.startX, drawingBox.currentX);
             const y = Math.min(drawingBox.startY, drawingBox.currentY);
@@ -1299,8 +1153,26 @@ export default function SankeyCanvas() {
             // Ignore if handled by children
             if (event.defaultPrevented) return;
 
-            // Only handle if we are in an adding mode
-            if (studioState.currentTool === 'select' || studioState.currentTool === 'pan') return;
+            const target = event.target as Element;
+            const clickedInteractive = Boolean(
+                target.closest('.sankey-node') ||
+                target.closest('.sankey-link') ||
+                target.closest('.sankey-label') ||
+                target.closest('.indep-label') ||
+                target.closest('.annotation-box')
+            );
+
+            if (studioState.currentTool === 'select' || studioState.currentTool === 'pan') {
+                if (!clickedInteractive) {
+                    dispatch({ type: 'SELECT_NODE', payload: null });
+                    dispatch({ type: 'SELECT_LINK', payload: null });
+                    dispatch({ type: 'SELECT_LABEL', payload: null });
+                    setPopover(null);
+                    setStatusText('Click on any element to edit it');
+                    hideTooltip();
+                }
+                return;
+            }
 
             const [x, y] = d3.pointer(event, mainGroup.node());
 
@@ -1327,11 +1199,10 @@ export default function SankeyCanvas() {
         });
 
         return () => {
-            if ((svg.node() as any).__particleTimer) ((svg.node() as any).__particleTimer as d3.Timer).stop();
             svg.on('click', null); // Cleanup click listener
         };
 
-    }, [data, settings, selectedNodeId, selectedLinkIndex, state.customLayout, state.independentLabels, state.selectedLabelId, studioState.currentTool, dispatch, getNodeColor, formatValue, getCustomization, handleNodeClick, setTool]);
+    }, [data, settings, selectedNodeId, state.customLayout, state.independentLabels, state.selectedLabelId, studioState.currentTool, dispatch, getNodeColor, formatValue, getCustomization, handleNodeClick, setTool]);
 
     return (
         <div ref={containerRef} className="w-full h-full bg-white border-0 overflow-hidden relative">
@@ -1344,47 +1215,9 @@ export default function SankeyCanvas() {
                 className="w-full h-full main-canvas"
                 style={{ minHeight: '600px' }}
             />
-            {/* Controls */}
-            <div className="absolute bottom-4 right-4 flex flex-col gap-2 bg-white  p-1.5 rounded-lg shadow-lg border border-gray-200 ">
-                <button
-                    onClick={() => {
-                        const svg = d3.select(svgRef.current);
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const zoom = (svg.node() as any).__zoomBehavior;
-                        if (zoom) svg.transition().duration(300).call(zoom.scaleBy, 1.2);
-                    }}
-                    className="p-1.5 hover:bg-gray-100 rounded text-gray-700 "
-                    title="Zoom In"
-                >
-                    <ZoomIn className="w-4 h-4" />
-                </button>
-                <button
-                    onClick={() => {
-                        const svg = d3.select(svgRef.current);
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const zoom = (svg.node() as any).__zoomBehavior;
-                        if (zoom) svg.transition().duration(300).call(zoom.scaleBy, 0.8);
-                    }}
-                    className="p-1.5 hover:bg-gray-100 rounded text-gray-700 "
-                    title="Zoom Out"
-                >
-                    <ZoomOut className="w-4 h-4" />
-                </button>
-                <div className="h-px bg-gray-200 my-0.5" />
-                <button
-                    onClick={() => {
-                        const svg = d3.select(svgRef.current);
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const zoom = (svg.node() as any).__zoomBehavior;
-                        if (zoom) svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
-                    }}
-                    className="p-1.5 hover:bg-gray-100 rounded text-gray-700 "
-                    title="Reset View"
-                >
-                    <Maximize2 className="w-4 h-4" />
-                </button>
+            <div className="absolute bottom-2 left-3 pointer-events-none select-none text-[11px] text-slate-400 bg-white/70 px-2 py-0.5 rounded">
+                {statusText}
             </div>
-
             {/* Top Toolbar */}
             {/* Top Toolbar - REMOVED (Handled by Toolbar component) */}
 

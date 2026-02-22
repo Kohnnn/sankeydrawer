@@ -114,7 +114,7 @@ export interface NodeCustomization {
   labelOffsetY?: number;
 
   // V11: Label Placement System
-  labelPlacement?: 'auto' | 'above' | 'below' | 'left' | 'right' | 'inside';
+  labelPlacement?: 'auto' | 'above' | 'below' | 'left' | 'right' | 'inside' | 'external';
 
   // Background/Highlighting
   showLabelBackground?: boolean;
@@ -169,7 +169,7 @@ export interface DiagramSettings {
   useFinancialTheme: boolean; // New: Auto-color flows by category
 
   // Labels
-  labelPosition: 'left' | 'right' | 'inside' | 'external'; // Added 'external'
+  labelPosition: 'auto' | 'above' | 'left' | 'right' | 'inside' | 'external';
   showLeaderLines: boolean; // New
   leaderLineColor: string; // New
   leaderLineWidth: number; // New
@@ -184,7 +184,7 @@ export interface DiagramSettings {
   valuePrefix: string;
   valueSuffix: string;
   valueDecimals: 0 | 1 | 2 | -1; // -1 = All
-  valueMode: 'absolute' | 'short' | 'hidden';
+  valueMode: 'absolute' | 'formatted' | 'short' | 'hidden';
 
   // Theme
   colorPalette: string;
@@ -229,17 +229,17 @@ export interface HistoryState {
 
 // Default settings
 export const defaultSettings: DiagramSettings = {
-  width: 1000,
+  width: 960,
   height: 600,
-  padding: { top: 60, right: 180, bottom: 60, left: 180 }, // Extra padding for external labels
-  nodeWidth: 12,
-  nodePadding: 24,
+  padding: { top: 56, right: 170, bottom: 56, left: 170 },
+  nodeWidth: 24,
+  nodePadding: 20,
   nodeOpacity: 1,
-  nodeBorderOpacity: 0.5,
+  nodeBorderOpacity: 0,
   nodeBorderRadius: 0, // Thinner nodes like SankeyArt
-  linkCurvature: 0.7,
+  linkCurvature: 0.5,
   linkCurveStyle: 'organic',
-  linkOpacity: 0.40,  // 40% like SankeyArt - allows overlaps to blend
+  linkOpacity: 0.55,
 
   linkGradient: true, // Professional gradient by default
   linkGradientType: 'source-to-target',
@@ -247,27 +247,27 @@ export const defaultSettings: DiagramSettings = {
   showParticles: false,
   particleSpeed: 1.0,
   useFinancialTheme: false, // Auto-color by category
-  labelPosition: 'external', // Standard external labels per professional overhaul
-  showLeaderLines: true,
+  labelPosition: 'auto',
+  showLeaderLines: false,
   leaderLineColor: '#9ca3af',
   leaderLineWidth: 1,
   labelFontFamily: 'Inter, sans-serif',  // Professional UI font like SankeyArt
-  labelFontSize: 14,
-  labelBold: true,
+  labelFontSize: 11,
+  labelBold: false,
   labelItalic: false,
   labelMargin: { top: 4, right: 8, bottom: 4, left: 8 },
   showComparisonLine: false,
   valuePrefix: '$',
   valueSuffix: '',
   valueDecimals: 0,
-  valueMode: 'absolute',
+  valueMode: 'formatted',
   colorPalette: 'financial',
   useDefaultPalette: true,
   isDarkMode: false, // Permanently false per professional overhaul
   showGrid: false,
   snapToGrid: false,  // Free movement by default (SankeyArt style)
   gridSize: 20,
-  enableFocusMode: true,
+  enableFocusMode: false,
   showMiniMap: false,
   showLegend: false,
   legendPosition: 'top-right',

@@ -1,44 +1,19 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Send, Upload, Sparkles, HelpCircle, FileText, Image as ImageIcon, Copy, Check, Settings, AlertCircle, Loader2, XCircle, Trash2, Palette, Lightbulb } from 'lucide-react';
+import { Send, Sparkles, FileText, Image as ImageIcon, Settings, AlertCircle, Loader2, XCircle, Trash2 } from 'lucide-react';
 import { useDiagram } from '@/context/DiagramContext';
 import { aiService } from '@/services/ai-service';
-import { useAISettings, Message, Attachment } from '@/context/AISettingsContext';
-import { parseDSL } from '@/lib/dsl-parser';
-import { callGemini, parseJsonFromResponse } from '@/lib/gemini-api';
+import { useAISettings, Attachment } from '@/context/AISettingsContext';
 import AISettingsPanel from './AISettingsPanel';
 
 export default function AIAssistantTab() {
     const { state, dispatch } = useDiagram();
-    const { settings, isConfigured, messages, addMessage, setMessages, clearMessages } = useAISettings();
+    const { settings, isConfigured, messages, addMessage, clearMessages } = useAISettings();
     // Removed local messages state initialization as it is now handled by context
     const [input, setInput] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [pendingFiles, setPendingFiles] = useState<Attachment[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
-
-    // Convert messages to Gemini format for context
-    const getConversationHistory = useCallback(() => {
-        return messages.slice(1).map(msg => {
-            const parts: any[] = [{ text: msg.content }];
-
-            if (msg.attachments && msg.attachments.length > 0) {
-                msg.attachments.forEach(att => {
-                    parts.push({
-                        inline_data: {
-                            mime_type: att.type,
-                            data: att.data.split(',')[1] // Remove base64 header
-                        }
-                    });
-                });
-            }
-
-            return {
-                role: msg.role === 'user' ? 'user' as const : 'model' as const,
-                parts: parts
-            };
-        });
-    }, [messages]);
 
     // Listen for AI actions from canvas (node context menu)
     useEffect(() => {
@@ -262,6 +237,12 @@ export default function AIAssistantTab() {
         "Highlight the largest expenses"
     ];
 
+    const DEMO_PROMPTS = [
+        'Revenue 1000 to Costs',
+        'Sales 800 to Gross Profit',
+        'Gross Profit 300 to Net Income',
+    ];
+
     // V9: Demo samples that work without API key
     const DEMO_SAMPLES = [
         {
@@ -357,10 +338,11 @@ export default function AIAssistantTab() {
     };
 
     // V9: Handle local parsing when no API key
-    const handleLocalParse = () => {
-        if (!input.trim()) return;
+    const handleLocalParse = (textOverride?: string) => {
+        const textToParse = (textOverride ?? input).trim();
+        if (!textToParse) return;
 
-        const flows = handleDemoParse(input);
+        const flows = handleDemoParse(textToParse);
         if (flows.length > 0) {
             // Create nodes and links
             const nodeNames = new Set<string>();
@@ -385,7 +367,7 @@ export default function AIAssistantTab() {
             addMessage({
                 id: Date.now().toString(),
                 role: 'user',
-                content: input,
+                content: textToParse,
                 timestamp: new Date()
             });
             addMessage({
@@ -394,7 +376,9 @@ export default function AIAssistantTab() {
                 content: `✅ Parsed ${flows.length} flows from your text! No API needed.`,
                 timestamp: new Date()
             });
-            setInput('');
+            if (textOverride === undefined) {
+                setInput('');
+            }
         } else {
             addMessage({
                 id: Date.now().toString(),
@@ -405,12 +389,20 @@ export default function AIAssistantTab() {
         }
     };
 
+    const handlePrimarySubmit = () => {
+        if (isConfigured) {
+            handleSend();
+            return;
+        }
+        handleLocalParse();
+    };
+
     return (
         <div className="flex flex-col h-full bg-[var(--panel-bg)]">
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-[var(--border)] bg-[var(--card-bg)]">
                 <div className="flex items-center gap-2 text-sm font-semibold text-[var(--primary-text)]">
-                    <Sparkles className="w-4 h-4 text-purple-500" />
+                    <Sparkles className="w-4 h-4 text-blue-500" />
                     AI Assistant
                 </div>
                 <div className="flex gap-1">
@@ -476,19 +468,21 @@ export default function AIAssistantTab() {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messages.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full text-center p-4 opacity-80">
-                        <div className="w-12 h-12 bg-purple-50 rounded-full flex items-center justify-center mb-4">
-                            <Sparkles className="w-6 h-6 text-purple-400" />
+                        <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+                            <Sparkles className="w-6 h-6 text-blue-400" />
                         </div>
                         <h3 className="text-sm font-medium text-[var(--primary-text)] mb-2">How can I help?</h3>
                         <p className="text-xs text-[var(--secondary-text)] mb-6 max-w-[200px]">
-                            Ask me to analyze data, change colors, or explain the flow.
+                            {isConfigured
+                                ? 'Ask me to analyze data, change style, or explain your flow.'
+                                : 'No API key needed. Use one of these text patterns to generate a diagram.'}
                         </p>
                         <div className="flex flex-wrap gap-2 justify-center">
-                            {SUGGESTED_QUESTIONS.map((q, i) => (
+                            {(isConfigured ? SUGGESTED_QUESTIONS : DEMO_PROMPTS).map((q, i) => (
                                 <button
                                     key={i}
-                                    onClick={() => handleSend(q)}
-                                    className="px-3 py-1.5 bg-white border border-purple-100 text-purple-600 text-xs rounded-full hover:bg-purple-50 transition-colors shadow-sm"
+                                    onClick={() => isConfigured ? handleSend(q) : handleLocalParse(q)}
+                                    className="px-3 py-1.5 bg-white border border-blue-100 text-blue-600 text-xs rounded-full hover:bg-blue-50 transition-colors shadow-sm"
                                 >
                                     {q}
                                 </button>
@@ -524,7 +518,7 @@ export default function AIAssistantTab() {
                             )}
                             <div
                                 className={`rounded-lg px-4 py-2 text-sm whitespace-pre-wrap w-full ${msg.role === 'user'
-                                    ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white'
+                                    ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white'
                                     : 'bg-[var(--background)] text-[var(--primary-text)]'
                                     }`}
                             >
@@ -559,7 +553,7 @@ export default function AIAssistantTab() {
                 {isProcessing && (
                     <div className="flex justify-start">
                         <div className="bg-[var(--background)] rounded-lg px-4 py-3 text-sm">
-                            <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                            <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
                         </div>
                     </div>
                 )}
@@ -611,28 +605,35 @@ export default function AIAssistantTab() {
                         <ImageIcon className="w-5 h-5" />
                     </button>
 
-                    <input
-                        type="text"
+                    <textarea
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handlePrimarySubmit();
+                            }
+                        }}
                         onPaste={handlePaste}
-                        placeholder={isConfigured ? "Ask me anything about your diagram..." : "Type data or configure API key..."}
-                        className="flex-1 px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 bg-[var(--card-bg)] text-[var(--primary-text)]"
+                        placeholder={isConfigured ? "Ask me anything about your diagram..." : "Try: Revenue 1000 to Costs"}
+                        rows={2}
+                        className="flex-1 px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--card-bg)] text-[var(--primary-text)] resize-none"
                         disabled={isProcessing}
                     />
 
                     <button
-                        onClick={() => handleSend()} // Fix checking TS strictness
+                        onClick={handlePrimarySubmit}
                         disabled={(!input.trim() && pendingFiles.length === 0) || isProcessing}
-                        className="p-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                        className="p-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
                         <Send className="w-5 h-5" />
                     </button>
                 </div>
 
                 <p className="mt-2 text-xs text-[var(--secondary-text)] text-center">
-                    {isConfigured ? 'AI-powered • Type or paste data' : 'Paste images or type: Source [Amount] Target'}
+                    {isConfigured
+                        ? 'AI-enabled mode • Type prompts or upload attachments'
+                        : 'Demo mode • Paste images or type: Source [Amount] Target'}
                 </p>
             </div>
 

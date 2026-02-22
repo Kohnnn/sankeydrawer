@@ -11,11 +11,11 @@ const THEME_PRESETS = {
     standard: {
         name: 'Standard',
         settings: {
-            nodeWidth: 20,
+            nodeWidth: 24,
             linkCurvature: 0.5,
-            linkOpacity: 0.4,
+            linkOpacity: 0.55,
             nodePadding: 20,
-            labelPosition: 'right' as const,
+            labelPosition: 'auto' as const,
         }
     },
     nvidia: {
@@ -37,8 +37,7 @@ const THEME_PRESETS = {
             linkGradient: true,
             linkOpacity: 0.5,
             nodeBorderRadius: 0,
-            labelPosition: 'external' as const,
-            showLeaderLines: true,
+            labelPosition: 'auto' as const,
             valuePrefix: '',
             valueSuffix: ' tỷ đồng',
             valueMode: 'short' as const,
@@ -47,6 +46,12 @@ const THEME_PRESETS = {
     }
 
 };
+
+const CANVAS_PRESETS = [
+    { id: 'small', label: 'Small', width: 640, height: 400 },
+    { id: 'medium', label: 'Medium', width: 960, height: 600 },
+    { id: 'large', label: 'Large', width: 1200, height: 800 },
+];
 
 export default function AppearanceTab() {
     const { state, dispatch } = useDiagram();
@@ -86,6 +91,18 @@ export default function AppearanceTab() {
     const updateSetting = useCallback(<K extends keyof typeof settings>(key: K, value: typeof settings[K]) => {
         dispatch({ type: 'UPDATE_SETTINGS', payload: { [key]: value } });
     }, [dispatch]);
+
+    const updatePadding = useCallback((side: 'top' | 'right' | 'bottom' | 'left', value: number) => {
+        dispatch({
+            type: 'UPDATE_SETTINGS',
+            payload: {
+                padding: {
+                    ...settings.padding,
+                    [side]: value,
+                },
+            },
+        });
+    }, [dispatch, settings.padding]);
 
     const addRecentColor = useCallback((color: string) => {
         const newColors = [color, ...recentColors.filter(c => c !== color)].slice(0, 5);
@@ -638,6 +655,31 @@ export default function AppearanceTab() {
             {/* Canvas Size Section */}
             <Section title="Canvas Size" isOpen={openSections.has('canvas')} onToggle={() => toggleSection('canvas')}>
                 <div className="space-y-3">
+                    <div>
+                        <label className="block text-xs font-medium text-[var(--secondary-text)] mb-2">Presets</label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {CANVAS_PRESETS.map((preset) => {
+                                const isActive = settings.width === preset.width && settings.height === preset.height;
+                                return (
+                                    <button
+                                        key={preset.id}
+                                        onClick={() => {
+                                            updateSetting('width', preset.width);
+                                            updateSetting('height', preset.height);
+                                        }}
+                                        className={`px-2 py-1.5 text-xs rounded border transition-colors ${
+                                            isActive
+                                                ? 'bg-blue-50 text-blue-700 border-blue-300'
+                                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        {preset.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-medium text-[var(--secondary-text)] mb-1">Width (px)</label>
@@ -662,6 +704,60 @@ export default function AppearanceTab() {
                                 step={50}
                                 className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
                             />
+                        </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-gray-100">
+                        <label className="block text-xs font-medium text-[var(--secondary-text)] mb-2">Canvas Margins (px)</label>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-[10px] text-gray-500 mb-1">Top</label>
+                                <input
+                                    type="number"
+                                    value={settings.padding.top}
+                                    onChange={(e) => updatePadding('top', Number(e.target.value))}
+                                    min={0}
+                                    max={400}
+                                    step={5}
+                                    className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] text-gray-500 mb-1">Right</label>
+                                <input
+                                    type="number"
+                                    value={settings.padding.right}
+                                    onChange={(e) => updatePadding('right', Number(e.target.value))}
+                                    min={0}
+                                    max={400}
+                                    step={5}
+                                    className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] text-gray-500 mb-1">Bottom</label>
+                                <input
+                                    type="number"
+                                    value={settings.padding.bottom}
+                                    onChange={(e) => updatePadding('bottom', Number(e.target.value))}
+                                    min={0}
+                                    max={400}
+                                    step={5}
+                                    className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] text-gray-500 mb-1">Left</label>
+                                <input
+                                    type="number"
+                                    value={settings.padding.left}
+                                    onChange={(e) => updatePadding('left', Number(e.target.value))}
+                                    min={0}
+                                    max={400}
+                                    step={5}
+                                    className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -836,49 +932,12 @@ export default function AppearanceTab() {
                     <label className="flex items-center gap-2 text-sm">
                         <input
                             type="checkbox"
-                            checked={settings.enableFocusMode ?? true}
-                            onChange={(e) => updateSetting('enableFocusMode', e.target.checked)}
-                            className="rounded"
-                        />
-                        Dim unconnected on select
-                    </label>
-
-                    <label className="flex items-center gap-2 text-sm">
-                        <input
-                            type="checkbox"
                             checked={settings.linkGradient}
                             onChange={(e) => updateSetting('linkGradient', e.target.checked)}
                             className="rounded"
                         />
                         Use Gradient Links
                     </label>
-
-                    {settings.linkGradient && (
-                        <div className="pl-6 space-y-2">
-                            <label className="block text-xs font-medium text-[var(--secondary-text)]">Gradient Style</label>
-                            <select
-                                value={settings.linkGradientType || 'source-to-target'}
-                                onChange={(e) => updateSetting('linkGradientType', e.target.value as any)}
-                                className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
-                            >
-                                <option value="source-to-target">Source → Target</option>
-                                <option value="both-ends">Both Ends Fade</option>
-                            </select>
-                        </div>
-                    )}
-
-                    <div>
-                        <label className="block text-xs font-medium text-[var(--secondary-text)] mb-1">Curve Style</label>
-                        <select
-                            value={settings.linkCurveStyle || 'organic'}
-                            onChange={(e) => updateSetting('linkCurveStyle', e.target.value as any)}
-                            className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
-                        >
-                            <option value="organic">Organic (SankeyArt)</option>
-                            <option value="geometric">Geometric</option>
-                            <option value="sharp">Sharp Angles</option>
-                        </select>
-                    </div>
 
                     <label className="flex items-center gap-2 text-sm">
                         <input
@@ -905,36 +964,6 @@ export default function AppearanceTab() {
                             <option value="screen">Screen (Lighter Overlaps)</option>
                             <option value="overlay">Overlay</option>
                         </select>
-                    </div>
-
-                    <div className="pt-2 border-t border-gray-100">
-                        <label className="flex items-center gap-2 text-sm mb-2">
-                            <input
-                                type="checkbox"
-                                checked={settings.showParticles ?? false}
-                                onChange={(e) => updateSetting('showParticles', e.target.checked)}
-                                className="rounded"
-                            />
-                            Show Flow Animation
-                            <span className="text-[10px] text-blue-500 bg-blue-50 px-1 rounded border border-blue-100">BETA</span>
-                        </label>
-
-                        {(settings.showParticles) && (
-                            <div>
-                                <label className="block text-xs font-medium text-[var(--secondary-text)] mb-1">
-                                    Animation Speed: {settings.particleSpeed}x
-                                </label>
-                                <input
-                                    type="range"
-                                    value={settings.particleSpeed ?? 1}
-                                    onChange={(e) => updateSetting('particleSpeed', Number(e.target.value))}
-                                    min={0.1}
-                                    max={2.0}
-                                    step={0.1}
-                                    className="w-full"
-                                />
-                            </div>
-                        )}
                     </div>
                 </div>
             </Section>
@@ -974,53 +1003,15 @@ export default function AppearanceTab() {
                                 onChange={(e) => updateSetting('labelPosition', e.target.value as any)}
                                 className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
                             >
+                                <option value="auto">Auto (Recommended)</option>
+                                <option value="above">Above</option>
                                 <option value="left">Left</option>
                                 <option value="right">Right</option>
+                                <option value="external">External</option>
                                 <option value="inside">Inside</option>
-                                <option value="external">External (Leader Lines)</option>
                             </select>
                         </div>
                     </div>
-
-                    {settings.labelPosition === 'external' && (
-                        <div className="space-y-3 pt-2 border-t border-gray-100">
-                            <label className="flex items-center justify-between text-xs font-medium text-[var(--secondary-text)] cursor-pointer">
-                                <span>Show Leader Lines</span>
-                                <input
-                                    type="checkbox"
-                                    checked={settings.showLeaderLines}
-                                    onChange={(e) => updateSetting('showLeaderLines', e.target.checked)}
-                                    className="rounded border-gray-300 text-blue-500 w-3.5 h-3.5"
-                                />
-                            </label>
-                            
-                            <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label className="block text-[10px] text-gray-500 mb-1">Line Color</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="color"
-                                            value={settings.leaderLineColor || '#9ca3af'}
-                                            onChange={(e) => updateSetting('leaderLineColor', e.target.value)}
-                                            className="w-6 h-6 rounded cursor-pointer border border-gray-200"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] text-gray-500 mb-1">Line Width</label>
-                                    <input
-                                        type="number"
-                                        value={settings.leaderLineWidth || 1}
-                                        onChange={(e) => updateSetting('leaderLineWidth', Number(e.target.value))}
-                                        min={0.5}
-                                        max={3}
-                                        step={0.5}
-                                        className="w-full px-2 py-0.5 text-xs border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
 
                     <div className="flex gap-4">
                         <label className="flex items-center gap-2 text-sm">
@@ -1242,9 +1233,10 @@ export default function AppearanceTab() {
                         <label className="block text-xs font-medium text-[var(--secondary-text)] mb-1">Value Display</label>
                         <select
                             value={settings.valueMode}
-                            onChange={(e) => updateSetting('valueMode', e.target.value as 'absolute' | 'short' | 'hidden')}
+                            onChange={(e) => updateSetting('valueMode', e.target.value as 'absolute' | 'formatted' | 'short' | 'hidden')}
                             className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
                         >
+                            <option value="formatted">Formatted</option>
                             <option value="absolute">Absolute</option>
                             <option value="short">Short (K/M/B)</option>
                             <option value="hidden">Hidden</option>

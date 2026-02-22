@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
-    Undo2, Redo2, Download, RotateCcw, FileJson, Image, FileCode,
+    Undo2, Redo2, FileJson, Image, FileCode,
     MousePointer2, Hand, Plus, GitBranch, Type, ZoomIn, ZoomOut,
     Maximize2, RotateCw, RefreshCw, Trash2, ArrowRightLeft, SquareDashed
 } from 'lucide-react';
@@ -14,6 +14,23 @@ import ToolbarDropdown from './ToolbarDropdown';
 export default function Toolbar() {
     const { history, undo, redo, resetSession, resetNodePositions, resetLabelPositions, state, dispatch } = useDiagram();
     const { state: studioState, setTool, zoomIn, zoomOut, zoomReset, dispatch: studioDispatch } = useStudio();
+
+    const applyCanvasSize = (width: number, height: number) => {
+        dispatch({ type: 'UPDATE_SETTINGS', payload: { width, height } });
+    };
+
+    const handleCustomCanvasSize = () => {
+        const widthInput = window.prompt('Canvas width (px)', String(state.settings.width));
+        if (!widthInput) return;
+        const heightInput = window.prompt('Canvas height (px)', String(state.settings.height));
+        if (!heightInput) return;
+
+        const width = Number(widthInput);
+        const height = Number(heightInput);
+        if (!Number.isFinite(width) || !Number.isFinite(height)) return;
+
+        applyCanvasSize(Math.max(400, Math.round(width)), Math.max(300, Math.round(height)));
+    };
 
     const handleExportPNG = (scale = 2) => {
         const svg = document.querySelector('svg');
@@ -78,7 +95,7 @@ export default function Toolbar() {
         URL.revokeObjectURL(url);
     };
 
-    const toolMenuItems = [
+    const layoutMenuItems = [
         { label: 'Select', icon: MousePointer2, onClick: () => setTool('select') },
         { label: 'Pan', icon: Hand, onClick: () => setTool('pan') },
         { label: 'Add Node', icon: Plus, onClick: () => setTool('addNode') },
@@ -87,6 +104,11 @@ export default function Toolbar() {
         { label: 'Add Text', icon: Type, onClick: () => setTool('addLabel') },
         { label: 'Add Image', icon: Image, onClick: () => setTool('addImage') },
         { label: 'Annotate', icon: SquareDashed, onClick: () => setTool('annotate') },
+        { label: 'Small (640x400)', onClick: () => applyCanvasSize(640, 400) },
+        { label: 'Medium (960x600)', onClick: () => applyCanvasSize(960, 600) },
+        { label: 'Large (1200x800)', onClick: () => applyCanvasSize(1200, 800) },
+        { label: 'Custom Size...', onClick: handleCustomCanvasSize },
+        { label: 'Reset Node Positions', icon: RotateCw, onClick: resetNodePositions },
     ];
 
     const fileMenuItems = [
@@ -102,11 +124,18 @@ export default function Toolbar() {
         { label: 'Zoom Out', icon: ZoomOut, onClick: zoomOut },
         { label: 'Reset Viewport', icon: Maximize2, onClick: zoomReset },
         { label: 'Toggle Grid', icon: RefreshCw, onClick: () => studioDispatch({ type: 'TOGGLE_GRID' }) },
-        { label: 'Reset Node Positions', icon: RotateCw, onClick: resetNodePositions },
         { label: 'Reset Label Positions', icon: RotateCw, onClick: resetLabelPositions },
     ];
 
-    const CurrentToolIcon = toolMenuItems.find(t => t.label.toLowerCase().replace(' ', '') === studioState.currentTool.toLowerCase())?.icon || MousePointer2;
+    const labelsMenuItems = [
+        { label: 'Auto Labels', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { labelPosition: 'auto' } }) },
+        { label: 'External Labels', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { labelPosition: 'external' } }) },
+        { label: 'Inside Labels', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { labelPosition: 'inside' } }) },
+        { label: 'Above Labels', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { labelPosition: 'above' } }) },
+        { label: 'Hide Values', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { valueMode: 'hidden' } }) },
+        { label: 'Show Values', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { valueMode: 'formatted' } }) },
+        { label: 'Reset Label Positions', icon: RotateCw, onClick: resetLabelPositions },
+    ];
 
 
     return (
@@ -114,16 +143,13 @@ export default function Toolbar() {
             <div className="flex items-center gap-2">
                 <ToolbarDropdown label="File" items={fileMenuItems} />
                 <ToolbarDropdown label="View" items={viewMenuItems} />
-                <ToolbarDropdown label="Tools" items={toolMenuItems} />
+                <ToolbarDropdown label="Labels" items={labelsMenuItems} />
+                <ToolbarDropdown label="Layout" items={layoutMenuItems} />
                 
                 <div className="w-px h-4 bg-slate-200 mx-2" />
-                
-                <div className="flex items-center gap-2 px-2 py-1 bg-slate-50 rounded-md border border-slate-100">
-                    <CurrentToolIcon className="w-4 h-4 text-blue-600" />
-                    <span className="text-xs font-medium text-slate-600 capitalize">
-                        {studioState.currentTool.replace(/([A-Z])/g, ' $1').trim()} Tool
-                    </span>
-                </div>
+                <span className="text-xs font-medium text-slate-500 capitalize tracking-tight">
+                    {studioState.currentTool.replace(/([A-Z])/g, ' $1').trim()}
+                </span>
             </div>
 
 

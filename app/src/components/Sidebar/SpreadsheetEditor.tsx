@@ -47,16 +47,6 @@ export default function SpreadsheetEditor() {
         dispatch({ type: 'SET_DSL', payload: dslText });
     }, [dispatch]);
 
-    // Auto-sync rows to canvas with a small debounce
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            // Only sync if rows actually changed from outside or internal edit
-            // commitChanges has its own internal filter for valid rows
-            commitChanges(rows);
-        }, 300);
-        return () => clearTimeout(timer);
-    }, [rows, commitChanges]);
-
     const handleValueBlur = (index: number, rawValue: string) => {
         // Auto-format value on blur if valid number
         const num = parseNumber(rawValue);
@@ -137,12 +127,12 @@ export default function SpreadsheetEditor() {
             newRows[index].isValid = true;
         }
 
-        setRows(newRows);
-
-        // If editing the last empty row, add another one
+        // If editing the trailing row, append a new blank row only once
         if (index === rows.length - 1 && value.trim()) {
-            setRows(prev => [...prev, { source: '', target: '', value: '', comparison: '', isValid: true }]);
+            newRows.push({ source: '', target: '', value: '', comparison: '', isValid: true });
         }
+
+        setRows(newRows);
     };
 
     const handleBlur = () => {

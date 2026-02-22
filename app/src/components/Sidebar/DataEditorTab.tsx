@@ -127,11 +127,15 @@ export default function DataEditorTab() {
                                 <button
                                     onClick={() => {
                                         handleDSLChange(`// SaaS Logic
-Revenue : #10b981
-Cost of Goods : #ef4444
-Gross Profit : #3b82f6
-Operating Exp : #f59e0b
-Net Income : #6366f1
+Total Revenue : #1d4ed8
+Cost of Goods : #0ea5e9
+Gross Profit : #1f7ae0
+Sales & Marketing : #3b82f6
+R&D : #22c55e
+G&A : #64748b
+Operating Income : #0d9488
+Taxes : #f97316
+Net Income : #0891b2
 
 Total Revenue [1000] Cost of Goods
 Total Revenue [4000] Gross Profit
