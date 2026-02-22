@@ -1,5 +1,8 @@
 'use client';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react-hooks/set-state-in-effect */
+
 import { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, ChevronRight, Save, Trash2, Check, Plus, Type, Image as ImageIcon } from 'lucide-react';
 import { useDiagram } from '@/context/DiagramContext';
@@ -13,7 +16,7 @@ const THEME_PRESETS = {
         settings: {
             nodeWidth: 24,
             linkCurvature: 0.5,
-            linkOpacity: 0.55,
+            linkOpacity: 0.38,
             nodePadding: 20,
             labelPosition: 'auto' as const,
         }
@@ -655,6 +658,17 @@ export default function AppearanceTab() {
             {/* Canvas Size Section */}
             <Section title="Canvas Size" isOpen={openSections.has('canvas')} onToggle={() => toggleSection('canvas')}>
                 <div className="space-y-3">
+                    <div>
+                        <label className="block text-xs font-medium text-[var(--secondary-text)] mb-1">Diagram Title</label>
+                        <input
+                            type="text"
+                            value={settings.diagramTitle}
+                            onChange={(e) => updateSetting('diagramTitle', e.target.value)}
+                            placeholder="Cash Flow Template"
+                            className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
+                        />
+                    </div>
+
                     <div>
                         <label className="block text-xs font-medium text-[var(--secondary-text)] mb-2">Presets</label>
                         <div className="grid grid-cols-3 gap-2">

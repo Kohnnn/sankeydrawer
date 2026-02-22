@@ -26,7 +26,7 @@ export interface SankeyNode {
 
   // Data Structure Extensions (V2)
   group?: string; // Logical group (e.g., "Expenses", "Revenue")
-  metadata?: Record<string, any>; // Flexible context (AI reasoning, source ref)
+  metadata?: Record<string, unknown>; // Flexible context (AI reasoning, source ref)
   originalValue?: number; // Pre-scaling value
 }
 
@@ -46,7 +46,7 @@ export interface SankeyLink {
   index?: number;
 
   // Data Structure Extensions (V2)
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   originalValue?: number;
 }
 
@@ -149,6 +149,7 @@ export interface DiagramSettings {
   width: number;
   height: number;
   padding: { top: number; right: number; bottom: number; left: number };
+  diagramTitle: string;
 
   // Nodes
   nodeWidth: number;
@@ -231,7 +232,8 @@ export interface HistoryState {
 export const defaultSettings: DiagramSettings = {
   width: 960,
   height: 600,
-  padding: { top: 56, right: 170, bottom: 56, left: 170 },
+  padding: { top: 70, right: 200, bottom: 50, left: 200 },
+  diagramTitle: '',
   nodeWidth: 24,
   nodePadding: 20,
   nodeOpacity: 1,
@@ -239,7 +241,7 @@ export const defaultSettings: DiagramSettings = {
   nodeBorderRadius: 0, // Thinner nodes like SankeyArt
   linkCurvature: 0.5,
   linkCurveStyle: 'organic',
-  linkOpacity: 0.55,
+  linkOpacity: 0.38,
 
   linkGradient: true, // Professional gradient by default
   linkGradientType: 'source-to-target',
@@ -252,7 +254,7 @@ export const defaultSettings: DiagramSettings = {
   leaderLineColor: '#9ca3af',
   leaderLineWidth: 1,
   labelFontFamily: 'Inter, sans-serif',  // Professional UI font like SankeyArt
-  labelFontSize: 11,
+  labelFontSize: 13,
   labelBold: false,
   labelItalic: false,
   labelMargin: { top: 4, right: 8, bottom: 4, left: 8 },
@@ -283,13 +285,17 @@ export const sampleData: SankeyData = {
     { id: 'cogs', name: 'Cost of Goods Sold', category: 'expense' },
     { id: 'gross_profit', name: 'Gross Profit', category: 'profit' },
     { id: 'operating_expenses', name: 'Operating Expenses', category: 'expense' },
+    { id: 'operating_income', name: 'Operating Income', category: 'profit' },
+    { id: 'taxes', name: 'Taxes', category: 'expense' },
     { id: 'net_income', name: 'Net Income', category: 'profit' },
   ],
   links: [
-    { source: 'revenue', target: 'cogs', value: 400 },
-    { source: 'revenue', target: 'gross_profit', value: 600 },
-    { source: 'gross_profit', target: 'operating_expenses', value: 200 },
-    { source: 'gross_profit', target: 'net_income', value: 400 },
+    { source: 'revenue', target: 'cogs', value: 1200 },
+    { source: 'revenue', target: 'gross_profit', value: 2800 },
+    { source: 'gross_profit', target: 'operating_expenses', value: 900 },
+    { source: 'gross_profit', target: 'operating_income', value: 1900 },
+    { source: 'operating_income', target: 'taxes', value: 400 },
+    { source: 'operating_income', target: 'net_income', value: 1500 },
   ],
 };
 
@@ -307,7 +313,6 @@ export const DEFAULT_PALETTE = [
   '#15803d', // Dark Green
 ];
 export const GOOGLE_FONTS = [
-  { value: 'Manrope, sans-serif', label: 'Manrope' },
   { value: 'Inter, sans-serif', label: 'Inter' },
   { value: 'Roboto, sans-serif', label: 'Roboto' },
   { value: 'Open Sans, sans-serif', label: 'Open Sans' },

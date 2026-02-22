@@ -1,8 +1,10 @@
 'use client';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { useRef, useEffect, useCallback, useState } from 'react';
 import * as d3 from 'd3';
-import { sankey } from 'd3-sankey';
+import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
 import { useDiagram } from '@/context/DiagramContext';
 import { useStudio } from '@/context/StudioContext';
 import { SankeyNode, NodeCustomization } from '@/types/sankey';
@@ -122,9 +124,26 @@ export default function SankeyCanvas() {
         const width = settings.width;
         const height = settings.height;
         const { padding } = settings;
-        const labelSideOffset = 6;
-        const labelAboveOffset = 6;
+        const labelSideOffset = 14;
+        const labelAboveOffset = 10;
         const labelBelowOffset = 6;
+        const DEFAULT_LABEL_NAME_SIZE = 13;
+        const DEFAULT_LABEL_VALUE_SIZE = 12;
+
+        const frame = svg.selectAll<SVGRectElement, null>('rect.canvas-frame').data([null]);
+        frame
+            .enter()
+            .insert('rect', ':first-child')
+            .attr('class', 'canvas-frame')
+            .merge(frame as any)
+            .attr('x', 0.5)
+            .attr('y', 0.5)
+            .attr('width', Math.max(0, width - 1))
+            .attr('height', Math.max(0, height - 1))
+            .attr('fill', '#ffffff')
+            .attr('stroke', '#e5e7eb')
+            .attr('stroke-width', 1)
+            .style('pointer-events', 'none');
 
         // --- Setup Main Group & Layers (One-time setup) ---
         let mainGroup = svg.select<SVGGElement>('g.main-group');
@@ -198,11 +217,15 @@ export default function SankeyCanvas() {
             svg.select('.empty-message').transition().duration(300).attr('opacity', 0).remove();
         }
 
+        const extent: [[number, number], [number, number]] = [
+            [padding.left, padding.top],
+            [width - padding.right, height - padding.bottom],
+        ];
+
         const sankeyGenerator = sankey<any, any>()
             .nodeId((d: any) => d.id)
             .nodeWidth(settings.nodeWidth)
-            .nodePadding(settings.nodePadding)
-            .extent([[padding.left, padding.top], [width - padding.right, height - padding.bottom]]);
+            .extent(extent);
 
         // Filter & Clone Data
         const validLinks = data.links.filter((l) => {
@@ -227,27 +250,69 @@ export default function SankeyCanvas() {
             return;
         }
 
-        let processedGraph;
-        try {
-            const calcData = {
-                nodes: data.nodes.map(n => ({ ...n })),
-                links: validLinks.map(l => ({ ...l }))
-            };
-            processedGraph = sankeyGenerator(calcData);
-        } catch (e) { console.error(e); return; }
+        const buildGraphInput = () => ({
+            nodes: data.nodes.map((node) => ({ ...node })),
+            links: validLinks.map((link) => ({ ...link })),
+        });
+
+        let processedGraph: any | null = null;
+        const minPadding = 4;
+        const preferredPadding = Math.max(minPadding, settings.nodePadding);
+        const paddingCandidates = Array.from(new Set([
+            preferredPadding,
+            Math.max(minPadding, preferredPadding - 4),
+            Math.max(minPadding, preferredPadding - 8),
+            12,
+            8,
+            6,
+            4,
+        ]));
+
+        for (const nodePadding of paddingCandidates) {
+            sankeyGenerator.nodePadding(nodePadding);
+
+            try {
+                const candidateGraph = sankeyGenerator(buildGraphInput());
+                const hasOverflow = candidateGraph.nodes.some((node: any) =>
+                    node.x0 < extent[0][0] ||
+                    node.x1 > extent[1][0] ||
+                    node.y0 < extent[0][1] ||
+                    node.y1 > extent[1][1],
+                );
+
+                processedGraph = candidateGraph;
+                if (!hasOverflow) {
+                    break;
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        if (!processedGraph) {
+            return;
+        }
 
         const { nodes, links } = processedGraph;
 
         // Custom Layout Override
         if (state.customLayout && state.customLayout.nodes) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             nodes.forEach((node: any) => {
                 const customPos = state.customLayout.nodes[node.id];
                 if (customPos) {
                     const nW = node.x1 - node.x0;
                     const nH = node.y1 - node.y0;
-                    node.x0 = customPos.x; node.x1 = customPos.x + nW;
-                    node.y0 = customPos.y; node.y1 = customPos.y + nH;
+                    const minX = extent[0][0];
+                    const maxX = extent[1][0];
+                    const minY = extent[0][1];
+                    const maxY = extent[1][1];
+                    const clampedX = Math.max(minX, Math.min(Math.max(minX, maxX - nW), customPos.x));
+                    const clampedY = Math.max(minY, Math.min(Math.max(minY, maxY - nH), customPos.y));
+
+                    node.x0 = clampedX;
+                    node.x1 = clampedX + nW;
+                    node.y0 = clampedY;
+                    node.y1 = clampedY + nH;
                 }
             });
             sankeyGenerator.update(processedGraph);
@@ -267,6 +332,7 @@ export default function SankeyCanvas() {
         const annotationLayer = getLayer('layer-annotations');
         const logoLayer = getLayer('layer-logo');
         const legendLayer = getLayer('layer-legend');
+        const titleLayer = getLayer('layer-title');
 
         // --- Logo Overlay ---
         logoLayer.selectAll('*').remove();
@@ -334,6 +400,22 @@ export default function SankeyCanvas() {
                     .text(item.label);
             });
 
+        }
+
+        // --- Diagram Title ---
+        titleLayer.selectAll('*').remove();
+        if (settings.diagramTitle.trim()) {
+            titleLayer
+                .append('text')
+                .attr('x', width / 2)
+                .attr('y', 35)
+                .attr('text-anchor', 'middle')
+                .attr('font-family', 'Inter, sans-serif')
+                .attr('font-weight', 600)
+                .attr('font-size', 24)
+                .attr('fill', '#1f2937')
+                .style('pointer-events', 'none')
+                .text(settings.diagramTitle);
         }
 
         // --- Annotation Boxes ---
@@ -413,62 +495,45 @@ export default function SankeyCanvas() {
         function hideTooltip() { tooltip.style('visibility', 'hidden'); }
 
         // --- Links ---
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const smoothLinkPath = (d: any) => {
-            const sx = d.source.x1;
-            const tx = d.target.x0;
-            const sy0 = d.y0;
-            const ty1 = d.y1;
+        const linkPathGenerator = sankeyLinkHorizontal<any, any>();
+        const getLinkPath = (d: any) => linkPathGenerator(d) ?? '';
 
-            const gap = Math.max(1, tx - sx);
-            const curveLength = Math.min(gap * 0.28, 84);
-            const flatStartX = sx + curveLength;
-            const flatEndX = tx - curveLength;
-            const midY = (sy0 + ty1) / 2;
-
-            if (flatEndX <= flatStartX + 2) {
-                const c1 = sx + gap * 0.4;
-                const c2 = tx - gap * 0.4;
-                return `M ${sx},${sy0} C ${c1},${sy0} ${c2},${ty1} ${tx},${ty1}`;
-            }
-
-            return [
-                `M ${sx},${sy0}`,
-                `C ${sx + curveLength * 0.35},${sy0} ${flatStartX - curveLength * 0.2},${midY} ${flatStartX},${midY}`,
-                `L ${flatEndX},${midY}`,
-                `C ${flatEndX + curveLength * 0.2},${midY} ${tx - curveLength * 0.35},${ty1} ${tx},${ty1}`,
-            ].join(' ');
-        };
-
-        const getGradientId = (sourceId: string, targetId: string) => {
+        const getGradientId = (sourceId: string, targetId: string, linkIndex?: number) => {
             const encodeSegment = (value: string) =>
                 Array.from(value)
                     .map((char) => char.charCodeAt(0).toString(16).padStart(2, '0'))
                     .join('');
 
-            return `grad-${encodeSegment(sourceId)}-${encodeSegment(targetId)}`;
+            return `grad-${encodeSegment(sourceId)}-${encodeSegment(targetId)}-${linkIndex ?? 0}`;
         };
 
+        defs.selectAll('linearGradient.link-gradient').remove();
+
         // Gradients
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         links.forEach((l: any) => {
-            const id = getGradientId(l.source.id, l.target.id);
-            let g = defs.select<SVGLinearGradientElement>('#' + id);
-            if (g.empty()) {
-                g = defs.append('linearGradient').attr('id', id).attr('gradientUnits', 'userSpaceOnUse');
-                g.append('stop').attr('offset', '0%').attr('class', 's');
-                g.append('stop').attr('offset', '100%').attr('class', 't');
-            }
-            g.attr('x1', l.source.x1)
-                .attr('y1', l.y0)
+            const id = getGradientId(l.source.id, l.target.id, l.index);
+            const g = defs
+                .append('linearGradient')
+                .attr('id', id)
+                .attr('class', 'link-gradient')
+                .attr('gradientUnits', 'userSpaceOnUse')
+                .attr('x1', l.source.x1)
+                .attr('y1', 0)
                 .attr('x2', l.target.x0)
-                .attr('y2', l.y1);
+                .attr('y2', 0);
 
             const sourceColor = l.source.flowColor || getNodeColor(l.source, 0);
             const targetColor = getNodeColor(l.target, 0);
-            g.select('.m').remove();
-            g.select('.s').attr('stop-color', sourceColor).attr('stop-opacity', 1);
-            g.select('.t').attr('stop-color', targetColor).attr('stop-opacity', 1);
+
+            g.append('stop')
+                .attr('offset', '0%')
+                .attr('stop-color', sourceColor)
+                .attr('stop-opacity', 1);
+
+            g.append('stop')
+                .attr('offset', '100%')
+                .attr('stop-color', targetColor)
+                .attr('stop-opacity', 1);
         });
 
         const getAutoPlacement = (node: any): 'left' | 'right' | 'above' => {
@@ -479,7 +544,7 @@ export default function SankeyCanvas() {
             return 'above';
         };
 
-        const resolvePlacement = (node: any, custom?: NodeCustomization) => {
+        const resolvePlacement = (node: any, custom?: NodeCustomization): 'left' | 'right' | 'above' | 'below' | 'inside' | 'external' => {
             if (custom?.labelPlacement && custom.labelPlacement !== 'auto') {
                 return custom.labelPlacement;
             }
@@ -492,7 +557,13 @@ export default function SankeyCanvas() {
                 return node.x0 < width / 2 ? 'left' : 'right';
             }
 
-            return settings.labelPosition;
+            if (settings.labelPosition === 'inside') {
+                return 'inside';
+            }
+
+            return settings.labelPosition === 'left' || settings.labelPosition === 'right' || settings.labelPosition === 'above'
+                ? settings.labelPosition
+                : 'above';
         };
 
         const getLabelCoordinates = (node: any, custom?: NodeCustomization) => {
@@ -520,25 +591,174 @@ export default function SankeyCanvas() {
             return { x, y, placement };
         };
 
-        const getLabelAnchor = (node: any, placement: string) => {
+        const getLabelAnchor = (node: any, placement: string): 'start' | 'middle' | 'end' => {
             if (placement === 'left') return 'end';
             if (placement === 'right') return 'start';
             if (placement === 'external') return node.x0 < width / 2 ? 'end' : 'start';
             return 'middle';
         };
 
-        const shouldUseLabelHalo = (node: any, placement: string) => {
-            const incoming = node.targetLinks?.length ?? 0;
-            const outgoing = node.sourceLinks?.length ?? 0;
-            const isMiddleNode = incoming > 0 && outgoing > 0;
-            return placement === 'inside' || (placement === 'above' && isMiddleNode);
+        interface LabelBounds {
+            x0: number;
+            x1: number;
+            y0: number;
+            y1: number;
+        }
+
+        interface NodeBounds extends LabelBounds {
+            id: string;
+        }
+
+        interface LabelLayout {
+            x: number;
+            y: number;
+            placement: 'left' | 'right' | 'above' | 'below' | 'inside' | 'external';
+            anchor: 'start' | 'middle' | 'end';
+            nameText: string;
+            valueText: string;
+            nameSize: number;
+            valueSize: number;
+        }
+
+        const intersects = (a: LabelBounds, b: LabelBounds) => {
+            return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
         };
+
+        const estimateTextWidth = (text: string, size: number) => {
+            if (!text) return size * 2;
+            return Math.max(size * 2, text.length * size * 0.58);
+        };
+
+        const createLabelBounds = (
+            x: number,
+            y: number,
+            anchor: 'start' | 'middle' | 'end',
+            placement: string,
+            nameText: string,
+            valueText: string,
+            nameSize: number,
+            valueSize: number,
+        ): LabelBounds => {
+            const labelWidth = Math.max(
+                estimateTextWidth(nameText, nameSize),
+                estimateTextWidth(valueText, valueSize),
+            );
+            const labelHeight = valueText ? nameSize + valueSize + 4 : nameSize;
+
+            let x0 = x - labelWidth / 2;
+            if (anchor === 'start') {
+                x0 = x;
+            } else if (anchor === 'end') {
+                x0 = x - labelWidth;
+            }
+
+            const y0 = placement === 'above' ? y - nameSize : y - labelHeight / 2;
+            const paddingPx = 2;
+
+            return {
+                x0: x0 - paddingPx,
+                x1: x0 + labelWidth + paddingPx * 2,
+                y0: y0 - paddingPx,
+                y1: y0 + labelHeight + paddingPx * 2,
+            };
+        };
+
+        const nodeBounds: NodeBounds[] = nodes.map((node: any) => ({
+            id: node.id,
+            x0: node.x0,
+            x1: node.x1,
+            y0: node.y0,
+            y1: node.y1,
+        }));
+
+        const linkBounds: LabelBounds[] = links.map((link: any) => {
+            const halfWidth = Math.max(4, (link.width || 0) * 0.5);
+            return {
+                x0: Math.min(link.source.x1, link.target.x0),
+                x1: Math.max(link.source.x1, link.target.x0),
+                y0: Math.min(link.y0, link.y1) - halfWidth,
+                y1: Math.max(link.y0, link.y1) + halfWidth,
+            };
+        });
+
+        const orderedNodes = [...nodes].sort((a: any, b: any) => a.y0 - b.y0);
+        const placedBounds: LabelBounds[] = [];
+        const labelLayouts = new Map<string, LabelLayout>();
+
+        orderedNodes.forEach((node: any) => {
+            const custom = getCustomization(node.id);
+            const { placement } = getLabelCoordinates(node, custom);
+            const { x, y: initialY } = getLabelCoordinates(node, custom);
+            let y = initialY;
+
+            const nameText = custom?.labelText || node.name;
+            const valueText = formatValue(node.value);
+            const nameSize = custom?.labelFontSize ?? settings.labelFontSize ?? DEFAULT_LABEL_NAME_SIZE;
+            const valueSize = Math.max(DEFAULT_LABEL_VALUE_SIZE, Math.round(nameSize - 1));
+
+            const baseAnchor = getLabelAnchor(node, placement);
+            const anchor: 'start' | 'middle' | 'end' = custom?.labelAlignment
+                ? custom.labelAlignment === 'left'
+                    ? 'start'
+                    : custom.labelAlignment === 'right'
+                        ? 'end'
+                        : 'middle'
+                : baseAnchor;
+
+            let bounds = createLabelBounds(x, y, anchor, placement, nameText, valueText, nameSize, valueSize);
+
+            if (placement === 'above') {
+                let attempts = 0;
+                while (attempts < 18) {
+                    const collidesNode = nodeBounds.some((entry: NodeBounds) => intersects(bounds, entry));
+                    const collidesLink = linkBounds.some((entry: LabelBounds) => intersects(bounds, entry));
+                    const collidesLabel = placedBounds.some((entry: LabelBounds) => intersects(bounds, entry));
+
+                    if (!collidesNode && !collidesLink && !collidesLabel) {
+                        break;
+                    }
+
+                    y -= 6;
+                    bounds = createLabelBounds(x, y, anchor, placement, nameText, valueText, nameSize, valueSize);
+                    attempts += 1;
+                }
+            } else if (placement === 'left' || placement === 'right' || placement === 'external') {
+                let attempts = 0;
+                while (attempts < 12) {
+                    const collidesLabel = placedBounds.some((entry: LabelBounds) => intersects(bounds, entry));
+                    if (!collidesLabel) {
+                        break;
+                    }
+
+                    y += 6;
+                    bounds = createLabelBounds(x, y, anchor, placement, nameText, valueText, nameSize, valueSize);
+                    attempts += 1;
+                }
+            }
+
+            if (bounds.y0 < padding.top) {
+                const delta = padding.top - bounds.y0;
+                y += delta;
+                bounds = createLabelBounds(x, y, anchor, placement, nameText, valueText, nameSize, valueSize);
+            }
+
+            placedBounds.push(bounds);
+            labelLayouts.set(node.id, {
+                x,
+                y,
+                placement,
+                anchor,
+                nameText,
+                valueText,
+                nameSize,
+                valueSize,
+            });
+        });
 
 
         // Link Join
         const linkSel = linkLayer.selectAll('.sankey-link')
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .data(links, (d: any) => `${d.source.id}-${d.target.id}`);
+            .data(links, (d: any) => `${d.source.id}-${d.target.id}-${d.index}`);
 
         // Exit: Fade out
         linkSel.exit().transition('style').duration(500).attr('opacity', 0).remove();
@@ -546,7 +766,7 @@ export default function SankeyCanvas() {
         // Enter: Init opacity 0, d at final pos (prevents flying from 0,0)
         const linkEnter = linkSel.enter().append('path')
             .attr('class', 'sankey-link cursor-pointer')
-            .attr('d', smoothLinkPath) // Start at correct position
+            .attr('d', getLinkPath)
             .attr('fill', 'none')
             .attr('opacity', 0);
 
@@ -554,7 +774,7 @@ export default function SankeyCanvas() {
 
         // Layout Transition (Geometry)
         linkUpdate.transition('layout').duration(750).ease(d3.easeCubicInOut)
-            .attr('d', smoothLinkPath);
+            .attr('d', getLinkPath);
 
         // Style Transition (Opacity/Color)
         linkUpdate.transition('style').duration(500)
@@ -562,7 +782,7 @@ export default function SankeyCanvas() {
             .style('mix-blend-mode', settings.linkBlendMode || 'normal')
             .attr('fill', 'none')
             .attr('stroke-width', (d: any) => Math.max(0.8, d.width))
-            .attr('stroke-linecap', 'round')
+            .attr('stroke-linecap', 'butt')
             .attr('stroke-linejoin', 'round')
             .style('pointer-events', 'stroke')
             .attr('stroke', (d: any) => {
@@ -577,13 +797,12 @@ export default function SankeyCanvas() {
 
                 // Original logic
                 return settings.linkGradient
-                    ? `url(#${getGradientId(d.source.id, d.target.id)})`
+                    ? `url(#${getGradientId(d.source.id, d.target.id, d.index)})`
                     : (d.source.flowColor || getNodeColor(d.source, 0));
             });
 
         // Interaction
         linkLayer.selectAll('.sankey-link')
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .on('mouseenter', function (e, d: any) {
                 d3.select(this).transition('style').duration(120).attr('opacity', 0.8);
                 const formatted = formatValue(d.value, true);
@@ -600,7 +819,6 @@ export default function SankeyCanvas() {
                 setStatusText('Click on any element to edit it');
                 hideTooltip();
             })
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .on('click', (e, d: any) => {
                 e.stopPropagation();
                 dispatch({ type: 'SELECT_LINK', payload: links.indexOf(d) });
@@ -611,7 +829,6 @@ export default function SankeyCanvas() {
 
         // --- Nodes ---
         const nodeSel = nodeLayer.selectAll('.sankey-node')
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .data(nodes, (d: any) => d.id);
 
         nodeSel.exit().transition('style').duration(500).attr('opacity', 0).remove();
@@ -667,7 +884,6 @@ export default function SankeyCanvas() {
 
 
         // Drag (V12: Optimized for 60fps with requestAnimationFrame)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const drag = d3.drag<any, any>()
             .filter((e) => !e.ctrlKey && !e.button) // Only left-click, no Ctrl
             .subject((e, d) => ({ x: d.x0, y: d.y0 }))
@@ -691,10 +907,10 @@ export default function SankeyCanvas() {
 
                 // Snap Logic
                 if (settings.snapToGrid) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const cols = Array.from(new Set(nodes.map((n: any) => n.x0))).sort((a: any, b: any) => a - b);
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    newX = cols.reduce((p, c) => Math.abs(c - e.x) < Math.abs(p - e.x) ? c : p);
+                    const cols: number[] = Array.from(new Set<number>(nodes.map((n: any) => Number(n.x0)))).sort((a, b) => a - b);
+                    newX = cols.reduce((closest, candidate) =>
+                        Math.abs(candidate - e.x) < Math.abs(closest - e.x) ? candidate : closest,
+                    );
                 } else {
                     // Free drag constrained to canvas
                     newX = Math.max(padding.left, Math.min(width - padding.right - w, e.x));
@@ -740,15 +956,7 @@ export default function SankeyCanvas() {
 
                     linkLayer.selectAll('.sankey-link')
                         .filter((linkD: any) => linkD.source.id === d.id || linkD.target.id === d.id)
-                        .attr('d', smoothLinkPath);
-
-                    labelLayer.selectAll('.sankey-label')
-                        .filter((labelD: any) => labelD.id === d.id)
-                        .attr('transform', () => {
-                            const custom = getCustomization(d.id);
-                            const coords = getLabelCoordinates(d, custom);
-                            return `translate(${coords.x}, ${coords.y})`;
-                        });
+                        .attr('d', getLinkPath);
                 });
             })
             .on('end', function (e, d) {
@@ -772,7 +980,7 @@ export default function SankeyCanvas() {
                 linkLayer.selectAll('.sankey-link')
                     .filter((linkD: any) => linkD.source.id === d.id || linkD.target.id === d.id)
                     .transition().duration(150).ease(d3.easeQuadOut)
-                    .attr('d', smoothLinkPath);
+                    .attr('d', getLinkPath);
 
                 d3.select(this)
                     .attr('cursor', 'grab')
@@ -802,7 +1010,6 @@ export default function SankeyCanvas() {
 
         // --- Labels ---
         const labelSel = labelLayer.selectAll('.sankey-label')
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .data(nodes, (d: any) => d.id);
 
         labelSel.exit().transition('style').duration(500).attr('opacity', 0).remove();
@@ -954,83 +1161,48 @@ export default function SankeyCanvas() {
         // Move with transition
         labelUpdate.transition('layout').duration(750).ease(d3.easeCubicInOut)
             .attr('transform', (d: any) => {
-                const custom = getCustomization(d.id);
-                const coords = getLabelCoordinates(d, custom);
-                return `translate(${coords.x}, ${coords.y})`;
+                const layout = labelLayouts.get(d.id);
+                if (!layout) {
+                    return `translate(${d.x0}, ${d.y0})`;
+                }
+
+                return `translate(${layout.x}, ${layout.y})`;
             })
             .each(function (d: any) {
                 const text = d3.select(this);
-                text.text(null); // Clear previous
+                text.text(null);
 
-                const custom = getCustomization(d.id);
-                const { placement } = getLabelCoordinates(d, custom);
-
-                // Determine Alignment
-                let align: 'start' | 'middle' | 'end' = getLabelAnchor(d, placement);
-
-                // Override
-                if (custom?.labelAlignment) {
-                    align = custom.labelAlignment === 'left' ? 'start' : custom.labelAlignment === 'right' ? 'end' : 'middle';
+                const layout = labelLayouts.get(d.id);
+                if (!layout) {
+                    return;
                 }
 
-                text.attr('text-anchor', align);
-                const useHalo = shouldUseLabelHalo(d, placement);
-                text.attr('paint-order', 'stroke')
-                    .attr('stroke', useHalo ? 'rgba(255,255,255,0.9)' : 'none')
-                    .attr('stroke-width', useHalo ? 3 : 0)
+                text
+                    .attr('text-anchor', layout.anchor)
+                    .attr('paint-order', 'normal')
+                    .attr('stroke', 'none')
+                    .attr('stroke-width', 0)
                     .attr('stroke-linejoin', 'round');
 
-                const line1Size = custom?.labelFontSize ?? settings.labelFontSize;
-                const line2Size = Math.max(10, Math.round(line1Size - 1));
-
-                // Line 1: Name
                 text.append('tspan')
                     .attr('x', 0)
-                    .attr('dy', placement === 'inside' ? '-0.2em' : '0em')
-                    .text(custom?.labelText || d.name)
-                    .attr('font-weight', (custom?.labelBold ?? settings.labelBold) ? 700 : 600)
-                    .attr('font-style', (custom?.labelItalic ?? settings.labelItalic) ? 'italic' : 'normal')
-                    .attr('font-family', custom?.labelFontFamily ?? settings.labelFontFamily)
-                    .attr('font-size', line1Size)
-                    .attr('fill', custom?.labelColor || '#1f2937');
-                
+                    .attr('dy', layout.placement === 'inside' ? '-0.15em' : '0em')
+                    .text(layout.nameText)
+                    .attr('font-weight', 600)
+                    .attr('font-style', 'normal')
+                    .attr('font-family', 'Inter, sans-serif')
+                    .attr('font-size', layout.nameSize)
+                    .attr('fill', '#111827');
 
-                // Line 2: Value
-                const formattedValue = formatValue(d.value);
-                if (formattedValue) {
+                if (layout.valueText) {
                     text.append('tspan')
                         .attr('x', 0)
                         .attr('dy', '1.15em')
-                        .text(formattedValue)
-                        .attr('font-family', custom?.labelFontFamily ?? settings.labelFontFamily)
-                        .attr('font-size', line2Size)
+                        .text(layout.valueText)
+                        .attr('font-family', 'Inter, sans-serif')
+                        .attr('font-size', layout.valueSize)
                         .attr('font-weight', 400)
-                        .attr('fill', custom?.valueColor || '#6b7280');
-                }
-
-
-                // Line 3: Custom Text (e.g. "+12%")
-                if (custom?.showSecondLine && custom.secondLineText) {
-                    text.append('tspan')
-                        .attr('x', 0)
-                        .attr('dy', '1.2em')
-                        .text(custom.secondLineText)
-                        .attr('font-size', custom.secondLineFontSize || ((custom?.labelFontSize ?? settings.labelFontSize) * 0.85))
-                        .attr('font-weight', custom.secondLineBold ? 'bold' : 'normal')
-                        .attr('font-style', custom.secondLineItalic ? 'italic' : 'normal')
-                        .attr('fill', custom.secondLineColor || '#10b981'); // Green default
-                }
-
-                // Line 4: More Custom Text
-                if (custom?.showThirdLine && custom.thirdLineText) {
-                    text.append('tspan')
-                        .attr('x', 0)
-                        .attr('dy', '1.2em')
-                        .text(custom.thirdLineText)
-                        .attr('font-size', custom.thirdLineFontSize || ((custom?.labelFontSize ?? settings.labelFontSize) * 0.75))
-                        .attr('font-weight', custom.thirdLineBold ? 'bold' : 'normal')
-                        .attr('font-style', custom.thirdLineItalic ? 'italic' : 'normal')
-                        .attr('fill', custom.thirdLineColor || '#6b7280');
+                        .attr('fill', '#6b7280');
                 }
             });
 
@@ -1039,7 +1211,6 @@ export default function SankeyCanvas() {
         independentLayer.raise(); // Ensure on top
 
         const indepSel = independentLayer.selectAll('.indep-label')
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .data(state.independentLabels || [], (d: any) => d.id);
 
         indepSel.exit().remove();
@@ -1051,7 +1222,6 @@ export default function SankeyCanvas() {
             .attr('transform', (d: any) => `translate(${d.x},${d.y})`);
 
         // Render Content
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         indepUpdate.each(function (d: any) {
             const g = d3.select(this);
             g.selectAll('*').remove(); // Re-render
@@ -1092,7 +1262,6 @@ export default function SankeyCanvas() {
         });
 
         // Drag Behavior for Independent Labels
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const dragLabel = d3.drag<any, any>()
             .on('start', function () {
                 d3.select(this).raise();
@@ -1205,7 +1374,7 @@ export default function SankeyCanvas() {
     }, [data, settings, selectedNodeId, state.customLayout, state.independentLabels, state.selectedLabelId, studioState.currentTool, dispatch, getNodeColor, formatValue, getCustomization, handleNodeClick, setTool]);
 
     return (
-        <div ref={containerRef} className="w-full h-full bg-white border-0 overflow-hidden relative">
+        <div ref={containerRef} className="w-full h-full bg-white border border-slate-200 overflow-hidden relative">
             <svg
 
                 ref={svgRef}

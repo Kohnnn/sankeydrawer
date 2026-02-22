@@ -3,7 +3,7 @@
 import React from 'react';
 import {
     Undo2, Redo2, FileJson, Image, FileCode,
-    MousePointer2, Hand, Plus, GitBranch, Type, ZoomIn, ZoomOut,
+    Hand, Plus, GitBranch, Type, ZoomIn, ZoomOut,
     Maximize2, RotateCw, RefreshCw, Trash2, ArrowRightLeft, SquareDashed
 } from 'lucide-react';
 import { useDiagram } from '@/context/DiagramContext';
@@ -96,7 +96,6 @@ export default function Toolbar() {
     };
 
     const layoutMenuItems = [
-        { label: 'Select', icon: MousePointer2, onClick: () => setTool('select') },
         { label: 'Pan', icon: Hand, onClick: () => setTool('pan') },
         { label: 'Add Node', icon: Plus, onClick: () => setTool('addNode') },
         { label: 'Add Flow', icon: GitBranch, onClick: () => setTool('addFlow') },

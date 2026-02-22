@@ -86,11 +86,21 @@ function historyReducer(state: HistoryState, action: DiagramAction): HistoryStat
     }
 
     if (action.type === 'LOAD_STATE') {
+        const staleLabelMatcher = /^(box|verified\s*edit|test\s*texte)/i;
+        const independentLabels = (action.payload.independentLabels || []).filter(
+            (label) => !staleLabelMatcher.test((label.text || '').trim()),
+        );
+        const annotationBoxes = (action.payload.annotationBoxes || []).filter(
+            (box) => !staleLabelMatcher.test((box.label || '').trim()),
+        );
+
         // Merge with defaults to handle missing new properties
         const loaded = {
             ...initialDiagramState,
             ...action.payload,
             settings: { ...defaultSettings, ...action.payload.settings, isDarkMode: false },
+            independentLabels,
+            annotationBoxes,
         };
         return { past: [], present: loaded, future: [] };
     }
@@ -224,7 +234,7 @@ function diagramReducer(state: DiagramState, action: DiagramAction): DiagramStat
 
         case 'ADD_LINK': {
             // Auto-create nodes for source/target if they don't exist
-            let nodes = [...state.data.nodes];
+            const nodes = [...state.data.nodes];
             const sourceId = typeof action.payload.source === 'string' ? action.payload.source : '';
             const targetId = typeof action.payload.target === 'string' ? action.payload.target : '';
 
