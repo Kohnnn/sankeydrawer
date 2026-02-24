@@ -128,7 +128,9 @@ export default function Toolbar() {
 
     const labelsMenuItems = [
         { label: 'Auto Labels', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { labelPosition: 'auto' } }) },
-        { label: 'External Labels', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { labelPosition: 'external' } }) },
+        { label: 'Outside Labels', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { labelPosition: 'outside' } }) },
+        { label: 'Before Labels', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { labelPosition: 'before' } }) },
+        { label: 'After Labels', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { labelPosition: 'after' } }) },
         { label: 'Inside Labels', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { labelPosition: 'inside' } }) },
         { label: 'Above Labels', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { labelPosition: 'above' } }) },
         { label: 'Hide Values', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { valueMode: 'hidden' } }) },

@@ -17,8 +17,9 @@ const THEME_PRESETS = {
             nodeWidth: 12,
             linkCurvature: 0.5,
             linkOpacity: 0.45,
+            linkBlendMode: 'multiply' as const,
             nodePadding: 24,
-            labelPosition: 'external' as const,
+            labelPosition: 'outside' as const,
         }
     },
     sankeyart: {
@@ -28,14 +29,15 @@ const THEME_PRESETS = {
             height: 800,
             padding: { top: 78, right: 70, bottom: 62, left: 70 },
             diagramTitle: 'Cash Flow Template',
-            nodeWidth: 24,
-            nodePadding: 20,
+            nodeWidth: 14,
+            nodePadding: 26,
             nodeOpacity: 1,
             linkCurvature: 0.45,
-            linkOpacity: 0.62,
+            linkOpacity: 0.45,
             linkGradient: false,
+            linkBlendMode: 'multiply' as const,
             useFinancialTheme: true,
-            labelPosition: 'external' as const,
+            labelPosition: 'outside' as const,
             labelFontSize: 13,
             labelBold: true,
             valuePrefix: '$',
@@ -1091,11 +1093,14 @@ export default function AppearanceTab() {
                                 className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
                             >
                                 <option value="auto">Auto (Recommended)</option>
+                                <option value="before">Before (Left)</option>
+                                <option value="after">After (Right)</option>
+                                <option value="outside">Outside</option>
+                                <option value="inside">Inside</option>
                                 <option value="above">Above</option>
                                 <option value="left">Left</option>
                                 <option value="right">Right</option>
                                 <option value="external">External</option>
-                                <option value="inside">Inside</option>
                             </select>
                         </div>
                     </div>

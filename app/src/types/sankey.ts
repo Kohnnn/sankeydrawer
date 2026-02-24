@@ -114,7 +114,7 @@ export interface NodeCustomization {
   labelOffsetY?: number;
 
   // V11: Label Placement System
-  labelPlacement?: 'auto' | 'above' | 'below' | 'left' | 'right' | 'inside' | 'external';
+  labelPlacement?: 'auto' | 'above' | 'below' | 'left' | 'right' | 'inside' | 'external' | 'before' | 'after' | 'outside';
 
   // Background/Highlighting
   showLabelBackground?: boolean;
@@ -170,7 +170,7 @@ export interface DiagramSettings {
   useFinancialTheme: boolean; // New: Auto-color flows by category
 
   // Labels
-  labelPosition: 'auto' | 'above' | 'left' | 'right' | 'inside' | 'external';
+  labelPosition: 'auto' | 'above' | 'left' | 'right' | 'inside' | 'external' | 'before' | 'after' | 'outside';
   showLeaderLines: boolean; // New
   leaderLineColor: string; // New
   leaderLineWidth: number; // New
@@ -232,11 +232,11 @@ export interface HistoryState {
 export const defaultSettings: DiagramSettings = {
   width: 960,
   height: 600,
-  padding: { top: 50, right: 50, bottom: 40, left: 50 },
+  padding: { top: 64, right: 82, bottom: 52, left: 82 },
   diagramTitle: '',
   nodeWidth: 12,
   nodePadding: 24,
-  nodeOpacity: 1,
+  nodeOpacity: 0.96,
   nodeBorderOpacity: 0,
   nodeBorderRadius: 0, // Thinner nodes like SankeyArt
   linkCurvature: 0.5,
@@ -245,11 +245,11 @@ export const defaultSettings: DiagramSettings = {
 
   linkGradient: true, // Professional gradient by default
   linkGradientType: 'source-to-target',
-  linkBlendMode: 'normal',
+  linkBlendMode: 'multiply',
   showParticles: false,
   particleSpeed: 1.0,
   useFinancialTheme: false, // Auto-color by category
-  labelPosition: 'external',
+  labelPosition: 'outside',
   showLeaderLines: false,
   leaderLineColor: '#9ca3af',
   leaderLineWidth: 1,
