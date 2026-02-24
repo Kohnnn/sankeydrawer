@@ -21,6 +21,32 @@ const THEME_PRESETS = {
             labelPosition: 'external' as const,
         }
     },
+    sankeyart: {
+        name: '🎯 SankeyArt Parity',
+        settings: {
+            width: 1200,
+            height: 800,
+            padding: { top: 78, right: 70, bottom: 62, left: 70 },
+            diagramTitle: 'Cash Flow Template',
+            nodeWidth: 24,
+            nodePadding: 20,
+            nodeOpacity: 1,
+            linkCurvature: 0.45,
+            linkOpacity: 0.62,
+            linkGradient: false,
+            useFinancialTheme: true,
+            labelPosition: 'external' as const,
+            labelFontSize: 13,
+            labelBold: true,
+            valuePrefix: '$',
+            valueSuffix: 'B',
+            valueMode: 'formatted' as const,
+            valueDecimals: 1 as const,
+            showGrid: false,
+            enableFocusMode: false,
+            showLegend: false,
+        }
+    },
     nvidia: {
         name: '✨ Nvidia Style (Pro)',
         settings: {
@@ -617,7 +643,8 @@ export default function AppearanceTab() {
                                 key={key}
                                 onClick={() => applyThemePreset(key)}
                                 className={`p-2.5 text-sm border rounded-lg transition-all text-left flex items-center justify-between group
-                                    ${key === 'nvidia' ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-indigo-200 text-indigo-700 hover:from-blue-100 hover:to-indigo-100' : 
+                                    ${key === 'sankeyart' ? 'bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200 text-emerald-700 hover:from-emerald-100 hover:to-teal-100' :
+                                      key === 'nvidia' ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-indigo-200 text-indigo-700 hover:from-blue-100 hover:to-indigo-100' : 
                                       key === 'vietnamese' ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-200 text-red-700 hover:from-red-100 hover:to-red-100' :
                                       'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'} shadow-sm hover:shadow`}
                             >

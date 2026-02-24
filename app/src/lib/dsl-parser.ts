@@ -1,5 +1,127 @@
 import { SankeyData, SankeyNode, SankeyLink } from '@/types/sankey';
 
+const INVALID_COMPARISON_TOKEN = /^(nan|null|undefined|n\/a|na|none|--?)$/i;
+
+interface ParsedFlowLine {
+    sourceName: string;
+    targetName: string;
+    value: number;
+    previousValue?: number;
+    comparisonValue?: string;
+}
+
+export function sanitizeComparisonLabel(value?: string | null): string | undefined {
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed || INVALID_COMPARISON_TOKEN.test(trimmed)) {
+        return undefined;
+    }
+
+    return trimmed;
+}
+
+function parseComparisonFields(value: number, rawComparison?: string): { previousValue?: number; comparisonValue?: string } {
+    const comparison = sanitizeComparisonLabel(rawComparison);
+    if (!comparison) {
+        return {};
+    }
+
+    const isStringLabel = comparison.startsWith('+') || comparison.endsWith('%') || comparison.startsWith('-');
+
+    if (!isStringLabel) {
+        const previous = parseNumber(comparison);
+        if (!isNaN(previous) && previous !== 0) {
+            const diff = value - previous;
+            const percent = ((diff / previous) * 100).toFixed(0);
+            const sign = diff >= 0 ? '+' : '';
+
+            return {
+                previousValue: previous,
+                comparisonValue: `${sign}${percent}%`,
+            };
+        }
+
+        if (/[a-zA-Z]/.test(comparison)) {
+            return { comparisonValue: comparison };
+        }
+
+        return {};
+    }
+
+    return { comparisonValue: comparison };
+}
+
+function parseArrowFlowLine(trimmed: string): ParsedFlowLine | null {
+    const arrowMatch = trimmed.match(/^(.+?)\s*->\s*(.+?)\s+([^\s]+)(?:\s+([^\s]+))?$/);
+    if (!arrowMatch) {
+        return null;
+    }
+
+    const sourceName = arrowMatch[1].trim();
+    const targetName = arrowMatch[2].trim();
+    const value = parseNumber(arrowMatch[3]);
+
+    if (!sourceName || !targetName || isNaN(value) || value <= 0) {
+        return null;
+    }
+
+    const comparison = parseComparisonFields(value, arrowMatch[4]);
+    return {
+        sourceName,
+        targetName,
+        value,
+        ...comparison,
+    };
+}
+
+function parseDelimitedFlowLine(trimmed: string): ParsedFlowLine | null {
+    let columns: string[] | null = null;
+
+    if (trimmed.includes('\t')) {
+        const tabColumns = trimmed.split('\t').map((value) => value.trim());
+        if (tabColumns.length >= 3) {
+            columns = tabColumns;
+        }
+    }
+
+    if (!columns && trimmed.includes(',')) {
+        const csvColumns = parseCSVLine(trimmed).map((value) => value.trim());
+        if (csvColumns.length >= 3) {
+            columns = csvColumns;
+        }
+    }
+
+    if (!columns) {
+        const spacedColumns = trimmed.split(/\s{2,}/).map((value) => value.trim()).filter(Boolean);
+        if (spacedColumns.length >= 3) {
+            columns = spacedColumns;
+        }
+    }
+
+    if (!columns) {
+        return null;
+    }
+
+    const sourceName = columns[0]?.trim() || '';
+    const targetName = columns[1]?.trim() || '';
+    const value = parseNumber(columns[2] || '');
+
+    if (!sourceName || !targetName || isNaN(value) || value <= 0) {
+        return null;
+    }
+
+    const comparison = parseComparisonFields(value, columns[3]);
+    return {
+        sourceName,
+        targetName,
+        value,
+        ...comparison,
+    };
+}
+
 /**
  * Parse DSL text into SankeyData
  * Format: "Source [Amount] Target" per line
@@ -39,14 +161,16 @@ export function parseDSL(text: string): SankeyData | null {
         // \]\s*            -> Closing bracket and space
         // (.+)$            -> Target
         const flowMatch = trimmed.match(/^(.+?)\s*\[([^\]]+)\]\s*(.+)$/);
+        let parsedFlow: ParsedFlowLine | null = null;
+
         if (flowMatch) {
             const sourceName = flowMatch[1].trim();
             const targetName = flowMatch[3].trim();
             const content = flowMatch[2].trim();
 
-            let value = 0;
-            let comparisonValue: string | undefined;
+            let value = parseNumber(content);
             let previousValue: number | undefined;
+            let comparisonValue: string | undefined;
 
             if (content.includes(',')) {
                 // Split by first comma to separate value and comparison
@@ -56,54 +180,47 @@ export function parseDSL(text: string): SankeyData | null {
 
                 value = parseNumber(valStr);
 
-                // Check if comparison string is a raw number (e.g. "400") or a string (e.g. "+10%")
-                // If it starts with + or contains %, treat as string label
-                const isStringLabel = compStr.startsWith('+') || compStr.endsWith('%') || compStr.startsWith('-');
-
-                if (!isStringLabel) {
-                    const prevVal = parseNumber(compStr);
-                    if (!isNaN(prevVal) && prevVal !== 0) {
-                        previousValue = prevVal;
-
-                        // Calculate Diff
-                        const diff = value - prevVal;
-                        const percent = ((diff / prevVal) * 100).toFixed(0);
-                        const sign = diff >= 0 ? '+' : '';
-
-                        // Default format: "+10%"
-                        comparisonValue = `${sign}${percent}%`;
-                    } else {
-                        comparisonValue = compStr;
-                    }
-                } else {
-                    comparisonValue = compStr; // Keep as string (e.g. "+10%", "Same")
-                }
+                const comparison = parseComparisonFields(value, compStr);
+                previousValue = comparison.previousValue;
+                comparisonValue = comparison.comparisonValue;
             } else {
                 value = parseNumber(content);
             }
 
             // Allow 0 value if it's a placeholder? But mostly we filter > 0
-            if (isNaN(value)) continue;
-
-            // Create nodes if they don't exist
-            if (!nodes.has(sourceName)) {
-                nodes.set(sourceName, createNode(sourceName, nodeColors.get(sourceName)));
+            if (!isNaN(value) && value > 0) {
+                parsedFlow = {
+                    sourceName,
+                    targetName,
+                    value,
+                    previousValue,
+                    comparisonValue,
+                };
             }
-            if (!nodes.has(targetName)) {
-                nodes.set(targetName, createNode(targetName, nodeColors.get(targetName)));
+        } else {
+            parsedFlow = parseArrowFlowLine(trimmed) || parseDelimitedFlowLine(trimmed);
+        }
+
+        if (parsedFlow) {
+            // Create nodes if they don't exist
+            if (!nodes.has(parsedFlow.sourceName)) {
+                nodes.set(parsedFlow.sourceName, createNode(parsedFlow.sourceName, nodeColors.get(parsedFlow.sourceName)));
+            }
+            if (!nodes.has(parsedFlow.targetName)) {
+                nodes.set(parsedFlow.targetName, createNode(parsedFlow.targetName, nodeColors.get(parsedFlow.targetName)));
             }
 
             // Use IDs for links to ensure they match node identifiers
-            const sourceNode = nodes.get(sourceName)!;
-            const targetNode = nodes.get(targetName)!;
+            const sourceNode = nodes.get(parsedFlow.sourceName)!;
+            const targetNode = nodes.get(parsedFlow.targetName)!;
 
             // Create link
             links.push({
                 source: sourceNode.id,
                 target: targetNode.id,
-                value,
-                previousValue,
-                comparisonValue,
+                value: parsedFlow.value,
+                previousValue: parsedFlow.previousValue,
+                comparisonValue: parsedFlow.comparisonValue,
             });
         }
     }
@@ -293,28 +410,7 @@ export function parseCSV(text: string): SankeyData | null {
 
         if (!sourceName || !targetName || isNaN(value) || value <= 0) continue;
 
-        let previousValue: number | undefined;
-        let comparisonValue: string | undefined;
-
-        if (compStr) {
-            // Check if string label or number
-            const isStringLabel = compStr.startsWith('+') || compStr.endsWith('%') || compStr.startsWith('-');
-
-            if (!isStringLabel) {
-                const prevVal = parseNumber(compStr);
-                if (!isNaN(prevVal) && prevVal !== 0) {
-                    previousValue = prevVal;
-                    const diff = value - prevVal;
-                    const percent = ((diff / prevVal) * 100).toFixed(0);
-                    const sign = diff >= 0 ? '+' : '';
-                    comparisonValue = `${sign}${percent}%`;
-                } else {
-                    comparisonValue = compStr;
-                }
-            } else {
-                comparisonValue = compStr;
-            }
-        }
+        const comparison = parseComparisonFields(value, compStr);
 
         if (!nodes.has(sourceName)) {
             nodes.set(sourceName, createNode(sourceName));
@@ -323,7 +419,13 @@ export function parseCSV(text: string): SankeyData | null {
             nodes.set(targetName, createNode(targetName));
         }
 
-        links.push({ source: sourceName, target: targetName, value, previousValue, comparisonValue });
+        links.push({
+            source: sourceName,
+            target: targetName,
+            value,
+            previousValue: comparison.previousValue,
+            comparisonValue: comparison.comparisonValue,
+        });
     }
 
     if (nodes.size === 0 || links.length === 0) return null;

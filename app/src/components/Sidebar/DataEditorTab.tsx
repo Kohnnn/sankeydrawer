@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { ChevronDown, ChevronRight, AlertCircle, FileJson, Copy, Table, FileText } from 'lucide-react';
+import { ChevronDown, AlertCircle, FileJson, Table, FileText } from 'lucide-react';
 import { useDiagram } from '@/context/DiagramContext';
-import { parseDSL, parseCSV } from '@/lib/dsl-parser';
+import { parseDSL } from '@/lib/dsl-parser';
 import { exportDataAsJson, importDataFromJson } from '@/lib/gemini-api';
 import SpreadsheetEditor from './SpreadsheetEditor';
 
@@ -20,7 +20,7 @@ export default function DataEditorTab() {
         dispatch({ type: 'SET_DSL', payload: text });
         const parsed = parseDSL(text);
         if (!parsed && text.trim()) {
-            setDslError('Invalid DSL format. Use: Source [Amount] Target');
+            setDslError('Invalid format. Use "Source [Amount] Target" or tab-separated rows: Source<TAB>Target<TAB>Amount<TAB>Comparison');
         } else {
             setDslError(null);
         }
@@ -257,7 +257,7 @@ Offer [60] Hired`);
                             </div>
                         )}
                         <p className="mt-2 text-xs text-[var(--secondary-text)]">
-                            Format: Source [Amount] Target
+                            Format: Source [Amount] Target or tab-separated rows
                         </p>
                     </div>
                 )}

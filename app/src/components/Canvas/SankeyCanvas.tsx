@@ -8,6 +8,7 @@ import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
 import { useDiagram } from '@/context/DiagramContext';
 import { useStudio } from '@/context/StudioContext';
 import { SankeyNode, NodeCustomization } from '@/types/sankey';
+import { sanitizeComparisonLabel } from '@/lib/dsl-parser';
 import NodeEditPopover from './NodeEditPopover';
 import MiniMap from './MiniMap';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -18,6 +19,13 @@ const COLORS: Record<string, string> = {
     expense: '#d1003f',
     profit: '#00a34c',
     neutral: '#94a3b8',
+};
+
+const LINK_COLORS: Record<string, string> = {
+    revenue: '#7fc8a4',
+    expense: '#d88aa5',
+    profit: '#8ec0dd',
+    neutral: '#bcc7d6',
 };
 
 const PALETTE = d3.schemeTableau10;
@@ -346,6 +354,7 @@ export default function SankeyCanvas() {
         const logoLayer = getLayer('layer-logo');
         const legendLayer = getLayer('layer-legend');
         const titleLayer = getLayer('layer-title');
+        labelLayer.raise();
 
         // --- Logo Overlay ---
         logoLayer.selectAll('*').remove();
@@ -503,7 +512,8 @@ export default function SankeyCanvas() {
                 return linkPathGenerator(d) ?? '';
             }
 
-            const bandWidth = Math.max(1.5, Number(d.width) || 0);
+            const rawBandWidth = Math.max(1.5, Number(d.width) || 0);
+            const bandWidth = Math.max(1.25, rawBandWidth * 0.88);
             const halfWidth = bandWidth / 2;
             const curvature = Math.max(0.15, Math.min(0.85, settings.linkCurvature || 0.5));
             const interpolateX = d3.interpolateNumber(sx, tx);
@@ -533,10 +543,14 @@ export default function SankeyCanvas() {
             return `grad-${encodeSegment(sourceId)}-${encodeSegment(targetId)}-${linkIndex ?? 0}`;
         };
 
+        const renderLinks = [...links].sort((a: any, b: any) => {
+            return Number(b.width || 0) - Number(a.width || 0);
+        });
+
         defs.selectAll('linearGradient.link-gradient').remove();
 
         // Gradients
-        links.forEach((l: any) => {
+        renderLinks.forEach((l: any) => {
             const id = getGradientId(l.source.id, l.target.id, l.index);
             const g = defs
                 .append('linearGradient')
@@ -706,10 +720,14 @@ export default function SankeyCanvas() {
         const getNodeComparisonText = (node: any): string => {
             const linksWithComparison = [...(node.sourceLinks || []), ...(node.targetLinks || [])];
             const match = linksWithComparison.find((link: any) => {
-                return typeof link.comparisonValue === 'string' && link.comparisonValue.trim().length > 0;
+                return Boolean(sanitizeComparisonLabel(String(link.comparisonValue || '')));
             });
 
-            return match ? String(match.comparisonValue).trim() : '';
+            if (!match) {
+                return '';
+            }
+
+            return sanitizeComparisonLabel(String(match.comparisonValue || '')) || '';
         };
 
         const nodeBounds: NodeBounds[] = nodes.map((node: any) => ({
@@ -992,10 +1010,10 @@ export default function SankeyCanvas() {
         const getLinkFill = (d: any) => {
             if (settings.useFinancialTheme) {
                 const sourceCategory = d.source.category;
-                if (sourceCategory === 'revenue') return COLORS.revenue;
-                if (sourceCategory === 'expense') return COLORS.expense;
-                if (sourceCategory === 'profit') return COLORS.profit;
-                return COLORS.neutral;
+                if (sourceCategory === 'revenue') return LINK_COLORS.revenue;
+                if (sourceCategory === 'expense') return LINK_COLORS.expense;
+                if (sourceCategory === 'profit') return LINK_COLORS.profit;
+                return LINK_COLORS.neutral;
             }
 
             return settings.linkGradient
@@ -1006,7 +1024,7 @@ export default function SankeyCanvas() {
 
         // Link Join
         const linkSel = linkLayer.selectAll('.sankey-link')
-            .data(links, (d: any) => `${d.source.id}-${d.target.id}-${d.index}`);
+            .data(renderLinks, (d: any) => `${d.source.id}-${d.target.id}-${d.index}`);
 
         // Exit: Fade out
         linkSel.exit().transition('style').duration(500).attr('opacity', 0).remove();
@@ -1129,6 +1147,14 @@ export default function SankeyCanvas() {
                 (d as any)._dragStartX = e.x; (d as any)._dragStartY = e.y;
                 (d as any)._dragStartTime = Date.now();
                 (d as any)._dragFrameCount = 0;
+                (d as any)._lastRenderX = null;
+                (d as any)._lastRenderY = null;
+                (d as any)._connectedLinks = linkLayer
+                    .selectAll('.sankey-link')
+                    .filter((linkD: any) => linkD.source.id === d.id || linkD.target.id === d.id);
+                (d as any)._draggedLabel = labelLayer
+                    .selectAll('.sankey-label')
+                    .filter((labelD: any) => labelD.id === d.id);
                 setStatusText('Click to edit, drag to move');
                 linkLayer.selectAll('.sankey-link').interrupt();
                 nodeLayer.selectAll('.sankey-node').interrupt();
@@ -1156,6 +1182,13 @@ export default function SankeyCanvas() {
                 newY = Math.max(padding.top, Math.min(height - padding.bottom - h, e.y));
 
                 (d as any)._dragFrame = requestAnimationFrame(() => {
+                    if ((d as any)._lastRenderX === newX && (d as any)._lastRenderY === newY) {
+                        return;
+                    }
+
+                    (d as any)._lastRenderX = newX;
+                    (d as any)._lastRenderY = newY;
+
                     // Visual-only update using CSS transform (GPU accelerated, no layout recalc)
                     d3.select(this).attr('transform', `translate(${newX},${newY})`);
 
@@ -1191,9 +1224,18 @@ export default function SankeyCanvas() {
                         });
                     }
 
-                    linkLayer.selectAll('.sankey-link')
-                        .filter((linkD: any) => linkD.source.id === d.id || linkD.target.id === d.id)
-                        .attr('d', getLinkPath);
+                    const connectedLinks = (d as any)._connectedLinks;
+                    if (connectedLinks) {
+                        connectedLinks.attr('d', getLinkPath);
+                    }
+
+                    const draggedLabel = (d as any)._draggedLabel;
+                    const hasManualLabelPosition = Boolean(state.customLayout?.labels?.[d.id]);
+                    if (draggedLabel && !hasManualLabelPosition) {
+                        const custom = getCustomization(d.id);
+                        const coords = getLabelCoordinates(d, custom);
+                        draggedLabel.attr('transform', `translate(${coords.x}, ${coords.y})`);
+                    }
                 });
             })
             .on('end', function (e, d) {
@@ -1214,10 +1256,20 @@ export default function SankeyCanvas() {
                 sankeyGenerator.update(processedGraph);
 
                 // Smooth transition to final link positions
-                linkLayer.selectAll('.sankey-link')
-                    .filter((linkD: any) => linkD.source.id === d.id || linkD.target.id === d.id)
-                    .transition().duration(150).ease(d3.easeQuadOut)
-                    .attr('d', getLinkPath);
+                const connectedLinks = (d as any)._connectedLinks;
+                if (connectedLinks) {
+                    connectedLinks
+                        .transition().duration(120).ease(d3.easeQuadOut)
+                        .attr('d', getLinkPath);
+                }
+
+                const draggedLabel = (d as any)._draggedLabel;
+                const hasManualLabelPosition = Boolean(state.customLayout?.labels?.[d.id]);
+                if (draggedLabel && !hasManualLabelPosition) {
+                    const custom = getCustomization(d.id);
+                    const coords = getLabelCoordinates(d, custom);
+                    draggedLabel.attr('transform', `translate(${coords.x}, ${coords.y})`);
+                }
 
                 d3.select(this)
                     .attr('cursor', 'grab')
@@ -1234,6 +1286,11 @@ export default function SankeyCanvas() {
                 } else {
                     dispatch({ type: 'MOVE_NODE', payload: { id: d.id, x: d.x0, y: d.y0 } });
                 }
+
+                (d as any)._connectedLinks = null;
+                (d as any)._draggedLabel = null;
+                (d as any)._lastRenderX = null;
+                (d as any)._lastRenderY = null;
             });
 
         // Apply drag to ALL nodes (enter + update), not just new ones
@@ -1284,7 +1341,7 @@ export default function SankeyCanvas() {
 
         // Apply drag handler and enable pointer events
         labelUpdate.call(labelDrag)
-            .style('pointer-events', 'all')  // Enable dragging
+            .style('pointer-events', 'bounding-box')
             .style('cursor', 'grab')
             .on('mouseenter', function () {
                 setStatusText('Drag to reposition label');

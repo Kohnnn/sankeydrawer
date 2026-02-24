@@ -95,6 +95,29 @@ describe('parseDSL', () => {
         expect(result!.links[0].comparisonValue).toBe('+10%');
     });
 
+    it('should ignore invalid comparison tokens like NaN', () => {
+        const input = 'Revenue [100, NaN] Expenses';
+        const result = parseDSL(input);
+
+        expect(result).not.toBeNull();
+        expect(result!.links[0].previousValue).toBeUndefined();
+        expect(result!.links[0].comparisonValue).toBeUndefined();
+    });
+
+    it('should parse tab-separated rows from SankeyArt-style tables', () => {
+        const input = [
+            'Net income\tCash from operations\t29.998\tNaN',
+            'Depreciation & amortization\tNon-cash charges\t2.916\tNaN',
+        ].join('\n');
+
+        const result = parseDSL(input);
+
+        expect(result).not.toBeNull();
+        expect(result!.links).toHaveLength(2);
+        expect(result!.links[0].value).toBeCloseTo(29.998);
+        expect(result!.links[0].comparisonValue).toBeUndefined();
+    });
+
     it('should aggregate duplicate links', () => {
         const input = `
       Revenue [100] Profit
@@ -219,6 +242,16 @@ Revenue,Profit,100,80`;
         expect(result).not.toBeNull();
         expect(result!.links[0].previousValue).toBe(80);
         expect(result!.links[0].comparisonValue).toBe('+25%');
+    });
+
+    it('should ignore NaN in comparison column', () => {
+        const input = `From,To,Value,Comparison
+Revenue,Profit,100,NaN`;
+
+        const result = parseCSV(input);
+        expect(result).not.toBeNull();
+        expect(result!.links[0].previousValue).toBeUndefined();
+        expect(result!.links[0].comparisonValue).toBeUndefined();
     });
 
     it('should return null for insufficient data', () => {
