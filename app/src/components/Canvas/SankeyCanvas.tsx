@@ -40,7 +40,7 @@ export default function SankeyCanvas() {
     const containerRef = useRef<HTMLDivElement>(null);
     const { state, dispatch } = useDiagram();
     const { state: studioState, dispatch: studioDispatch, setTool } = useStudio();
-    const { data, settings, selectedNodeId, selectedLinkIndex, nodeCustomizations } = state;
+    const { data, settings, selectedNodeId, nodeCustomizations } = state;
     const [popover, setPopover] = useState<PopoverState | null>(null);
     const [statusText, setStatusText] = useState('Click on any element to edit it');
 
@@ -516,10 +516,13 @@ export default function SankeyCanvas() {
                 return '';
             }
 
-            const curvature = Math.max(0.12, Math.min(0.88, settings.linkCurvature || 0.5));
-            const interpolateX = d3.interpolateNumber(sx, tx);
-            const controlX1 = interpolateX(curvature);
-            const controlX2 = interpolateX(1 - curvature);
+            const curvature = Math.max(0.18, Math.min(0.82, settings.linkCurvature || 0.45));
+            const deltaX = tx - sx;
+            const direction = deltaX >= 0 ? 1 : -1;
+            const controlStrength = Math.max(0.2, Math.min(0.46, curvature * 0.72 + 0.08));
+            const controlOffset = Math.max(8, Math.abs(deltaX) * controlStrength);
+            const controlX1 = sx + controlOffset * direction;
+            const controlX2 = tx - controlOffset * direction;
 
             return `M${sx},${sy} C${controlX1},${sy} ${controlX2},${ty} ${tx},${ty}`;
         };
@@ -617,7 +620,12 @@ export default function SankeyCanvas() {
             } else if (placement === 'right') {
                 x = node.x1 + gap;
             } else if (placement === 'above') {
-                y = node.y0 - gap;
+                const maxIncomingWidth = Math.max(
+                    0,
+                    ...((node.targetLinks || []).map((link: any) => Number(link.width || 0))),
+                );
+                const flowClearance = Math.max(6, Math.min(24, maxIncomingWidth * 0.5));
+                y = node.y0 - gap - flowClearance;
             } else if (placement === 'below') {
                 y = node.y1 + gap + 12;
             } else if (placement === 'inside') {
@@ -648,9 +656,11 @@ export default function SankeyCanvas() {
         }
 
         interface LabelLayout {
+            nodeId: string;
             x: number;
             y: number;
             placement: ResolvedLabelPlacement;
+            isManual: boolean;
             anchor: 'start' | 'middle' | 'end';
             nameText: string;
             valueText: string;
@@ -727,7 +737,12 @@ export default function SankeyCanvas() {
                 return '';
             }
 
-            return sanitizeComparisonLabel(String(match.comparisonValue || '')) || '';
+            const comparison = sanitizeComparisonLabel(String(match.comparisonValue || '')) || '';
+            if (comparison.length <= 28) {
+                return comparison;
+            }
+
+            return `${comparison.slice(0, 25)}...`;
         };
 
         const nodeBounds: NodeBounds[] = nodes.map((node: any) => ({
@@ -828,8 +843,8 @@ export default function SankeyCanvas() {
 
                 let attempts = 0;
                 const originalY = y;
-                const stepSize = 14;
-                while (attempts < 15) {
+                const stepSize = 18;
+                while (attempts < 24) {
                     const collidesNode = nodeBounds.some((entry: NodeBounds) => entry.id !== node.id && intersects(bounds, entry));
                     const collidesLabel = placedBounds.some((entry: LabelBounds) => intersects(bounds, entry));
 
@@ -936,9 +951,11 @@ export default function SankeyCanvas() {
 
             placedBounds.push(bounds);
             labelLayouts.set(node.id, {
+                nodeId: node.id,
                 x,
                 y,
                 placement,
+                isManual: Boolean(manualLabelPosition),
                 anchor,
                 nameText,
                 valueText,
@@ -951,15 +968,127 @@ export default function SankeyCanvas() {
             });
         });
 
-        const selectedLink = selectedLinkIndex !== null
-            ? links.find((link: any) => link.index === selectedLinkIndex) ?? links[selectedLinkIndex] ?? null
-            : null;
+        const SAFE_MARGIN = 10;
+
+        const clampLayoutToViewport = (layout: LabelLayout) => {
+            let nextX = layout.x;
+            let nextY = layout.y;
+
+            if (layout.bounds.x0 < SAFE_MARGIN) {
+                nextX += SAFE_MARGIN - layout.bounds.x0;
+            }
+            if (layout.bounds.x1 > width - SAFE_MARGIN) {
+                nextX -= layout.bounds.x1 - (width - SAFE_MARGIN);
+            }
+            if (layout.bounds.y0 < SAFE_MARGIN) {
+                nextY += SAFE_MARGIN - layout.bounds.y0;
+            }
+            if (layout.bounds.y1 > height - SAFE_MARGIN) {
+                nextY -= layout.bounds.y1 - (height - SAFE_MARGIN);
+            }
+
+            if (nextX !== layout.x || nextY !== layout.y) {
+                layout.x = nextX;
+                layout.y = nextY;
+                layout.bounds = createLabelBounds(
+                    layout.x,
+                    layout.y,
+                    layout.anchor,
+                    layout.placement,
+                    layout.nameText,
+                    layout.valueText,
+                    layout.comparisonText,
+                    layout.nameSize,
+                    layout.valueSize,
+                    layout.comparisonSize,
+                    layout.labelFamily,
+                );
+            }
+        };
+
+        const repulsableLayouts = Array.from(labelLayouts.values()).filter((layout) => {
+            return !layout.isManual && layout.placement !== 'inside';
+        });
+
+        const refreshBounds = (layout: LabelLayout) => {
+            layout.bounds = createLabelBounds(
+                layout.x,
+                layout.y,
+                layout.anchor,
+                layout.placement,
+                layout.nameText,
+                layout.valueText,
+                layout.comparisonText,
+                layout.nameSize,
+                layout.valueSize,
+                layout.comparisonSize,
+                layout.labelFamily,
+            );
+        };
+
+        for (let pass = 0; pass < 36; pass += 1) {
+            let movedAny = false;
+
+            for (let i = 0; i < repulsableLayouts.length; i += 1) {
+                const current = repulsableLayouts[i];
+
+                const collidingNode = nodeBounds.find((nodeBound) => {
+                    return nodeBound.id !== current.nodeId && intersects(current.bounds, nodeBound);
+                });
+
+                if (collidingNode) {
+                    const labelCenterY = (current.bounds.y0 + current.bounds.y1) / 2;
+                    const nodeCenterY = (collidingNode.y0 + collidingNode.y1) / 2;
+                    const nudgeDirection = labelCenterY <= nodeCenterY ? -1 : 1;
+                    current.y += nudgeDirection * 8;
+                    refreshBounds(current);
+                    clampLayoutToViewport(current);
+                    movedAny = true;
+                }
+            }
+
+            for (let i = 0; i < repulsableLayouts.length; i += 1) {
+                for (let j = i + 1; j < repulsableLayouts.length; j += 1) {
+                    const a = repulsableLayouts[i];
+                    const b = repulsableLayouts[j];
+
+                    if (!intersects(a.bounds, b.bounds)) {
+                        continue;
+                    }
+
+                    const overlapY = Math.min(a.bounds.y1, b.bounds.y1) - Math.max(a.bounds.y0, b.bounds.y0);
+                    if (overlapY <= 0) {
+                        continue;
+                    }
+
+                    const shift = overlapY / 2 + 4;
+                    if (a.y <= b.y) {
+                        a.y -= shift;
+                        b.y += shift;
+                    } else {
+                        a.y += shift;
+                        b.y -= shift;
+                    }
+
+                    refreshBounds(a);
+                    refreshBounds(b);
+                    clampLayoutToViewport(a);
+                    clampLayoutToViewport(b);
+                    movedAny = true;
+                }
+            }
+
+            if (!movedAny) {
+                break;
+            }
+        }
+
         const focusModeEnabled = settings.enableFocusMode ?? false;
 
         const baseLinkOpacity = Math.max(0.05, Math.min(1, settings.linkOpacity));
-        const dimmedLinkOpacity = 0.12;
-        const dimmedNodeOpacity = 0.2;
-        const dimmedLabelOpacity = 0.22;
+        const dimmedLinkOpacity = 0.25;
+        const dimmedNodeOpacity = 0.5;
+        const dimmedLabelOpacity = 0.45;
 
         const getLinkKey = (link: any) => {
             const indexValue = Number(link.index);
@@ -1032,6 +1161,7 @@ export default function SankeyCanvas() {
         let hoveredNodeId: string | null = null;
         let hoveredLinkKey: string | null = null;
         let activeFocus: { nodeIds: Set<string>; linkKeys: Set<string> } | null = null;
+        let isNodeDragging = false;
 
         const computeActiveFocus = () => {
             if (!focusModeEnabled) {
@@ -1047,14 +1177,6 @@ export default function SankeyCanvas() {
                 if (hoveredLink) {
                     return collectConnectedGraph([String(hoveredLink.source.id), String(hoveredLink.target.id)]);
                 }
-            }
-
-            if (selectedNodeId) {
-                return collectConnectedGraph([selectedNodeId]);
-            }
-
-            if (selectedLink) {
-                return collectConnectedGraph([String(selectedLink.source.id), String(selectedLink.target.id)]);
             }
 
             return null;
@@ -1128,11 +1250,13 @@ export default function SankeyCanvas() {
             .attr('fill', 'none')
             .attr('stroke', (d: any) => getLinkStroke(d))
             .attr('stroke-width', (d: any) => getRenderedLinkWidth(d))
-            .attr('stroke-linecap', 'round')
+            .attr('stroke-linecap', 'butt')
             .attr('stroke-linejoin', 'round')
             .attr('opacity', 0);
 
         const linkUpdate = linkEnter.merge(linkSel as any);
+
+        linkUpdate.sort((a: any, b: any) => Number(b.width || 0) - Number(a.width || 0));
 
         // Layout Transition (Geometry)
         linkUpdate.transition('layout').duration(750).ease(d3.easeCubicInOut)
@@ -1145,11 +1269,15 @@ export default function SankeyCanvas() {
             .style('mix-blend-mode', settings.linkBlendMode || 'multiply')
             .attr('fill', 'none')
             .attr('stroke', (d: any) => getLinkStroke(d))
-            .attr('stroke-linecap', 'round')
+            .attr('stroke-linecap', 'butt')
             .attr('stroke-linejoin', 'round')
             .style('pointer-events', 'stroke');
 
         const applyFocusStyles = (animate = true) => {
+            if (isNodeDragging && animate) {
+                return;
+            }
+
             refreshActiveFocus();
 
             const linksSelection = linkLayer.selectAll<SVGPathElement, any>('.sankey-link');
@@ -1188,6 +1316,10 @@ export default function SankeyCanvas() {
         // Interaction
         linkLayer.selectAll('.sankey-link')
             .on('mouseenter', function (e, d: any) {
+                if (isNodeDragging) {
+                    return;
+                }
+
                 hoveredLinkKey = getLinkKey(d);
                 hoveredNodeId = null;
                 applyFocusStyles();
@@ -1205,6 +1337,10 @@ export default function SankeyCanvas() {
                 showTooltip(e, `${d.source.name} → ${d.target.name}${formatted ? `: ${formatted}` : ''} (${percentage}%)`);
             })
             .on('mouseleave', function () {
+                if (isNodeDragging) {
+                    return;
+                }
+
                 hoveredLinkKey = null;
                 applyFocusStyles();
                 if (!focusModeEnabled) {
@@ -1242,6 +1378,14 @@ export default function SankeyCanvas() {
         nodeEnter.append('rect')
             .attr('rx', 0)
             .attr('ry', 0)
+            .attr('class', 'node-hit-area')
+            .attr('fill', 'transparent')
+            .attr('stroke', 'none')
+            .style('pointer-events', 'all');
+
+        nodeEnter.append('rect')
+            .attr('rx', 0)
+            .attr('ry', 0)
             .attr('class', 'node-rect');
 
         nodeEnter.append('circle')
@@ -1265,7 +1409,21 @@ export default function SankeyCanvas() {
 
         nodeUpdate.style('cursor', 'grab');
 
-        nodeUpdate.select('rect')
+        nodeUpdate.select('rect.node-hit-area')
+            .attr('x', (d: any) => {
+                const nodeWidth = d.x1 - d.x0;
+                const hitWidth = Math.max(14, nodeWidth);
+                return (nodeWidth - hitWidth) / 2;
+            })
+            .attr('y', (d: any) => {
+                const nodeHeight = d.y1 - d.y0;
+                const hitHeight = Math.max(14, nodeHeight);
+                return (nodeHeight - hitHeight) / 2;
+            })
+            .attr('width', (d: any) => Math.max(14, d.x1 - d.x0))
+            .attr('height', (d: any) => Math.max(14, d.y1 - d.y0));
+
+        nodeUpdate.select('rect.node-rect')
             .transition('layout').duration(750).ease(d3.easeCubicInOut)
             .attr('rx', 0)  // FORCE sharp - SankeyArt style
             .attr('ry', 0)
@@ -1273,9 +1431,9 @@ export default function SankeyCanvas() {
             .attr('height', (d: any) => d.y1 - d.y0)
             .attr('fill', (d: any, i) => getNodeColor(d, i))
             .attr('fill-opacity', Math.max(0.82, settings.nodeOpacity))
-            .attr('stroke', '#ffffff')
-            .attr('stroke-opacity', Math.max(0.16, settings.nodeBorderOpacity || 0))
-            .attr('stroke-width', 1);
+            .attr('stroke', 'none')
+            .attr('stroke-opacity', 0)
+            .attr('stroke-width', 0);
 
         const getNodeImbalance = (node: any) => {
             const incoming = (node.targetLinks || []).reduce((sum: number, link: any) => sum + Number(link.value || 0), 0);
@@ -1312,17 +1470,25 @@ export default function SankeyCanvas() {
 
         nodeUpdate
             .on('mouseenter', function (_e, d: any) {
+                if (isNodeDragging) {
+                    return;
+                }
+
                 hoveredNodeId = d.id;
                 hoveredLinkKey = null;
                 applyFocusStyles();
                 setStatusText('Click to edit, drag to move, double-click to reset');
-                d3.select(this).select('rect').attr('fill-opacity', Math.min(1, settings.nodeOpacity + 0.08));
+                d3.select(this).select('rect.node-rect').attr('fill-opacity', Math.min(1, settings.nodeOpacity + 0.08));
             })
             .on('mouseleave', function () {
+                if (isNodeDragging) {
+                    return;
+                }
+
                 hoveredNodeId = null;
                 applyFocusStyles();
                 setStatusText('Click on any element to edit it');
-                d3.select(this).select('rect').attr('fill-opacity', Math.max(0.82, settings.nodeOpacity));
+                d3.select(this).select('rect.node-rect').attr('fill-opacity', Math.max(0.82, settings.nodeOpacity));
             });
 
 
@@ -1331,11 +1497,13 @@ export default function SankeyCanvas() {
             .filter((e) => !e.ctrlKey && !e.button) // Only left-click, no Ctrl
             .subject((e, d) => ({ x: d.x0, y: d.y0 }))
             .on('start', function (e, d) {
+                isNodeDragging = true;
+                hoveredNodeId = null;
+                hoveredLinkKey = null;
                 d3.select(this).raise().attr('cursor', 'grabbing').style('will-change', 'transform');
                 (d as any)._dragStartX = e.x; (d as any)._dragStartY = e.y;
                 (d as any)._nodeStartX = d.x0;
                 (d as any)._nodeStartY = d.y0;
-                (d as any)._dragStartTime = Date.now();
                 (d as any)._dragFrameCount = 0;
                 (d as any)._lastRenderX = null;
                 (d as any)._lastRenderY = null;
@@ -1433,10 +1601,6 @@ export default function SankeyCanvas() {
                         draggedLabel.attr('transform', `translate(${nextLabelX}, ${nextLabelY})`);
                         (d as any)._tempManualLabelX = nextLabelX;
                         (d as any)._tempManualLabelY = nextLabelY;
-                    } else if (draggedLabel) {
-                        const custom = getCustomization(d.id);
-                        const coords = getLabelCoordinates(d, custom);
-                        draggedLabel.attr('transform', `translate(${coords.x}, ${coords.y})`);
                     }
                 });
             })
@@ -1491,13 +1655,13 @@ export default function SankeyCanvas() {
                 setStatusText('Click on any element to edit it');
 
                 const dist = Math.hypot(e.x - (d as any)._dragStartX, e.y - (d as any)._dragStartY);
-                if (dist < 3 && (Date.now() - (d as any)._dragStartTime < 500)) {
-                    // Click
-                    handleNodeClick(e.sourceEvent, d);
-                } else {
+                if (dist >= 3) {
                     dispatch({ type: 'MOVE_NODE', payload: { id: d.id, x: d.x0, y: d.y0 } });
+                } else if (e.sourceEvent) {
+                    handleNodeClick(e.sourceEvent as MouseEvent, d);
                 }
 
+                isNodeDragging = false;
                 applyFocusStyles(false);
 
                 (d as any)._connectedLinks = null;
@@ -1511,6 +1675,13 @@ export default function SankeyCanvas() {
 
         // Apply drag to ALL nodes (enter + update), not just new ones
         nodeUpdate.call(drag)
+            .on('click', function (e, d: any) {
+                if (e.defaultPrevented) {
+                    return;
+                }
+
+                handleNodeClick(e as unknown as MouseEvent, d);
+            })
             .on('dblclick', function (e, d: any) {
                 e.stopPropagation();
 
@@ -1539,6 +1710,8 @@ export default function SankeyCanvas() {
 
 
         // --- Labels ---
+        labelLayer.selectAll('text.sankey-label').remove();
+
         const labelSel = labelLayer.selectAll('.sankey-label')
             .data(nodes, (d: any) => d.id);
 
@@ -1561,6 +1734,7 @@ export default function SankeyCanvas() {
         const labelDrag = d3.drag<SVGGElement, any>()
             .on('start', function (e, d) {
                 e.sourceEvent?.stopPropagation();
+                e.sourceEvent?.preventDefault();
                 d3.select(this).raise().attr('cursor', 'grabbing');
                 setStatusText('Drag to reposition label');
                 labelLayer.selectAll('.sankey-label').interrupt();
@@ -1570,6 +1744,8 @@ export default function SankeyCanvas() {
                 (d as any)._tempLabelY = currentLayout?.y ?? d.y0;
             })
             .on('drag', function (e, d) {
+                e.sourceEvent?.stopPropagation();
+                e.sourceEvent?.preventDefault();
                 d3.select(this).attr('transform', `translate(${e.x}, ${e.y})`);
                 (d as any)._tempLabelX = e.x;
                 (d as any)._tempLabelY = e.y;
@@ -1652,9 +1828,9 @@ export default function SankeyCanvas() {
                 }
 
                 const custom = getCustomization(d.id);
-                const nameColor = custom?.labelColor || '#1f2937';
-                const valueColor = custom?.valueColor || '#4b5563';
-                const comparisonColor = custom?.thirdLineColor || '#9ca3af';
+                const nameColor = custom?.labelColor || '#000000';
+                const valueColor = custom?.valueColor || '#000000';
+                const comparisonColor = custom?.thirdLineColor || '#000000';
                 const nameWeight = (custom?.labelBold ?? settings.labelBold) ? 700 : 600;
                 const nameStyle = (custom?.labelItalic ?? settings.labelItalic) ? 'italic' : 'normal';
 
@@ -1699,14 +1875,15 @@ export default function SankeyCanvas() {
 
                 const localX = layout.bounds.x0 - layout.x;
                 const localY = layout.bounds.y0 - layout.y;
+                const hitPadding = 20;
                 const localWidth = Math.max(14, layout.bounds.x1 - layout.bounds.x0);
                 const localHeight = Math.max(14, layout.bounds.y1 - layout.bounds.y0);
 
                 hitArea
-                    .attr('x', localX)
-                    .attr('y', localY)
-                    .attr('width', localWidth)
-                    .attr('height', localHeight);
+                    .attr('x', localX - hitPadding)
+                    .attr('y', localY - hitPadding)
+                    .attr('width', localWidth + hitPadding * 2)
+                    .attr('height', localHeight + hitPadding * 2);
             });
 
         applyFocusStyles(false);
@@ -1880,7 +2057,7 @@ export default function SankeyCanvas() {
                 const id = `label-${Date.now()}`;
                 dispatch({
                     type: 'ADD_INDEPENDENT_LABEL', payload: {
-                        id, type: 'text', text: 'Double click to edit', x, y, fontSize: 24, fontFamily: 'Inter, sans-serif', color: '#111827', bold: true
+                        id, type: 'text', text: 'Text', x, y, fontSize: 24, fontFamily: 'Inter, sans-serif', color: '#111827', bold: true
                     }
                 });
                 setTool('select');
@@ -1909,7 +2086,6 @@ export default function SankeyCanvas() {
         data,
         settings,
         selectedNodeId,
-        selectedLinkIndex,
         state.annotationBoxes,
         state.customLayout,
         state.independentLabels,

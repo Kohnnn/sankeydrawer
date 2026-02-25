@@ -106,6 +106,7 @@ export default function Toolbar() {
         { label: 'Small (640x400)', onClick: () => applyCanvasSize(640, 400) },
         { label: 'Medium (960x600)', onClick: () => applyCanvasSize(960, 600) },
         { label: 'Large (1200x800)', onClick: () => applyCanvasSize(1200, 800) },
+        { label: 'HD (1600x900)', onClick: () => applyCanvasSize(1600, 900) },
         { label: 'Custom Size...', onClick: handleCustomCanvasSize },
         { label: 'Reset Node Positions', icon: RotateCw, onClick: resetNodePositions },
     ];

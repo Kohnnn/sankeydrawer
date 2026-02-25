@@ -194,7 +194,7 @@ export interface DiagramSettings {
   showGrid: boolean;
   snapToGrid: boolean;
   gridSize: number;
-  enableFocusMode: boolean; // New: Toggle dimming on selection
+  enableFocusMode: boolean; // Hover-only path highlight mode
   showMiniMap: boolean; // New
   showLegend: boolean; // New
   legendPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'; // New
@@ -232,14 +232,14 @@ export interface HistoryState {
 export const defaultSettings: DiagramSettings = {
   width: 960,
   height: 600,
-  padding: { top: 64, right: 82, bottom: 52, left: 82 },
+  padding: { top: 50, right: 50, bottom: 50, left: 50 },
   diagramTitle: '',
-  nodeWidth: 12,
-  nodePadding: 24,
-  nodeOpacity: 0.96,
+  nodeWidth: 30,
+  nodePadding: 30,
+  nodeOpacity: 1,
   nodeBorderOpacity: 0,
   nodeBorderRadius: 0, // Thinner nodes like SankeyArt
-  linkCurvature: 0.5,
+  linkCurvature: 0.45,
   linkCurveStyle: 'organic',
   linkOpacity: 0.45,
 
@@ -254,8 +254,8 @@ export const defaultSettings: DiagramSettings = {
   leaderLineColor: '#9ca3af',
   leaderLineWidth: 1,
   labelFontFamily: 'Inter, sans-serif',  // Professional UI font like SankeyArt
-  labelFontSize: 13,
-  labelBold: false,
+  labelFontSize: 11,
+  labelBold: true,
   labelItalic: false,
   labelMargin: { top: 4, right: 8, bottom: 4, left: 8 },
   showComparisonLine: false,

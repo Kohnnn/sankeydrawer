@@ -6,7 +6,6 @@ import Toolbar from '@/components/Canvas/Toolbar';
 import { CanvasErrorBoundary } from '@/components/Canvas/CanvasErrorBoundary';
 
 import Sidebar from '@/components/Sidebar/Sidebar';
-import BalanceIndicator from '@/components/Canvas/BalanceIndicator';
 
 // Dynamic import to avoid SSR issues with D3
 const SankeyCanvas = dynamic(() => import('@/components/Canvas/SankeyCanvas'), {
@@ -41,7 +40,6 @@ export default function Home() {
           <CanvasErrorBoundary>
             <SankeyCanvas />
           </CanvasErrorBoundary>
-          <BalanceIndicator />
         </div>
 
         {/* Sidebar (30%) */}
@@ -50,4 +48,3 @@ export default function Home() {
     </div>
   );
 }
-

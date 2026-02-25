@@ -4,9 +4,9 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, Save, Trash2, Check, Plus, Type, Image as ImageIcon } from 'lucide-react';
+import { ChevronDown, ChevronRight, Save, Trash2, Check, Plus, Type, Image as ImageIcon, Maximize2 } from 'lucide-react';
 import { useDiagram } from '@/context/DiagramContext';
-import { getAllPalettes, saveCustomPalette, deleteCustomPalette, getDefaultPaletteId, setDefaultPalette, parseColorsFromString, ColorPalette } from '@/lib/colorPalettes';
+import { getAllPalettes, saveCustomPalette, getDefaultPaletteId, setDefaultPalette, parseColorsFromString, ColorPalette } from '@/lib/colorPalettes';
 import { getTemplates, saveTemplate, deleteTemplate, applyTemplate, PRESET_TEMPLATES, DiagramTemplate } from '@/lib/templates';
 import { GOOGLE_FONTS, NodeCustomization, DEFAULT_PALETTE } from '@/types/sankey';
 
@@ -14,23 +14,25 @@ const THEME_PRESETS = {
     standard: {
         name: 'Standard',
         settings: {
-            nodeWidth: 12,
-            linkCurvature: 0.5,
+            nodeWidth: 30,
+            linkCurvature: 0.45,
             linkOpacity: 0.45,
             linkBlendMode: 'multiply' as const,
-            nodePadding: 24,
+            nodePadding: 30,
             labelPosition: 'outside' as const,
+            labelFontSize: 11,
+            labelBold: true,
         }
     },
     sankeyart: {
         name: '🎯 SankeyArt Parity',
         settings: {
-            width: 1200,
-            height: 800,
-            padding: { top: 78, right: 70, bottom: 62, left: 70 },
-            diagramTitle: 'Cash Flow Template',
-            nodeWidth: 14,
-            nodePadding: 26,
+            width: 960,
+            height: 600,
+            padding: { top: 50, right: 50, bottom: 50, left: 50 },
+            diagramTitle: '',
+            nodeWidth: 30,
+            nodePadding: 30,
             nodeOpacity: 1,
             linkCurvature: 0.45,
             linkOpacity: 0.45,
@@ -38,7 +40,7 @@ const THEME_PRESETS = {
             linkBlendMode: 'multiply' as const,
             useFinancialTheme: true,
             labelPosition: 'outside' as const,
-            labelFontSize: 13,
+            labelFontSize: 11,
             labelBold: true,
             valuePrefix: '$',
             valueSuffix: 'B',
@@ -82,6 +84,7 @@ const CANVAS_PRESETS = [
     { id: 'small', label: 'Small', width: 640, height: 400 },
     { id: 'medium', label: 'Medium', width: 960, height: 600 },
     { id: 'large', label: 'Large', width: 1200, height: 800 },
+    { id: 'hd', label: 'HD', width: 1600, height: 900 },
 ];
 
 export default function AppearanceTab() {
@@ -89,7 +92,7 @@ export default function AppearanceTab() {
     const { settings, selectedNodeId, data } = state;
     const selectedNode = selectedNodeId ? data.nodes.find(n => n.id === selectedNodeId) : null;
 
-    const [openSections, setOpenSections] = useState<Set<string>>(new Set(['palette', 'label']));
+    const [openSections, setOpenSections] = useState<Set<string>>(new Set(['smartLayouts']));
     const [recentColors, setRecentColors] = useState<string[]>([]);
     const [palettes, setPalettes] = useState<ColorPalette[]>([]);
     const [templates, setTemplates] = useState<DiagramTemplate[]>([]);
@@ -177,11 +180,6 @@ export default function AppearanceTab() {
         }
     }, [newPaletteName, newPaletteColors]);
 
-    const handleDeletePalette = useCallback((id: string) => {
-        deleteCustomPalette(id);
-        setPalettes(getAllPalettes());
-    }, []);
-
     const handleSaveTemplate = useCallback(() => {
         if (newTemplateName) {
             saveTemplate(newTemplateName, settings, settings.colorPalette);
@@ -229,20 +227,34 @@ export default function AppearanceTab() {
         dispatch({ type: 'UPDATE_SETTINGS', payload: preset.settings });
     }, [dispatch]);
 
+    const handleAutoFitCanvas = useCallback(() => {
+        const nodeCount = state.data.nodes.length;
+        const flowCount = state.data.links.length;
+
+        const nextWidth = Math.max(960, Math.min(2000, 760 + nodeCount * 34));
+        const nextHeight = Math.max(600, Math.min(1400, 420 + flowCount * 18));
+
+        const sidePadding = Math.max(72, Math.min(180, Math.round(nextWidth * 0.085)));
+        const topPadding = Math.max(56, Math.min(180, Math.round(nextHeight * 0.11)));
+        const bottomPadding = Math.max(48, Math.min(160, Math.round(nextHeight * 0.09)));
+
+        dispatch({
+            type: 'UPDATE_SETTINGS',
+            payload: {
+                width: nextWidth,
+                height: nextHeight,
+                padding: {
+                    top: topPadding,
+                    right: sidePadding,
+                    bottom: bottomPadding,
+                    left: sidePadding,
+                },
+            },
+        });
+    }, [dispatch, state.data.links.length, state.data.nodes.length]);
+
     return (
         <div className="p-4 space-y-4">
-            <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2">
-                <label className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 cursor-pointer select-none">
-                    <span>Focus Mode (Dim Others)</span>
-                    <input
-                        type="checkbox"
-                        checked={settings.enableFocusMode}
-                        onChange={(e) => updateSetting('enableFocusMode', e.target.checked)}
-                        className="rounded border-gray-300 text-blue-500"
-                    />
-                </label>
-            </div>
-
             {/* Selected Node Section */}
             {selectedNode && (
                 <div className="bg-blue-50  rounded-lg border border-blue-200  p-4 space-y-4">
@@ -658,44 +670,6 @@ export default function AppearanceTab() {
                 </div>
             </Section>
 
-            {/* Global Palette Section */}
-            <Section title="Global Colors" isOpen={openSections.has('palette')} onToggle={() => toggleSection('palette')}>
-                <div className="space-y-3">
-                    <div>
-                        <label className="block text-xs font-medium text-[var(--secondary-text)] mb-2">Color Palette</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            {getAllPalettes().map(palette => (
-                                <button
-                                    key={palette.id}
-                                    onClick={() => {
-                                        updateSetting('colorPalette', palette.id);
-                                        updateSetting('useDefaultPalette', false);
-                                    }}
-                                    className={`relative p-2 border rounded-md text-left transition-all ${settings.colorPalette === palette.id ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50' : 'hover:bg-gray-50 border-[var(--border)]'}`}
-                                >
-                                    <span className="block text-xs font-medium mb-1 truncate">{palette.name}</span>
-                                    <div className="flex h-2 rounded overflow-hidden">
-                                        {palette.colors.slice(0, 5).map((c, i) => (
-                                            <div key={i} style={{ backgroundColor: c, width: '20%' }} />
-                                        ))}
-                                    </div>
-                                </button>
-                            ))}
-                            {/* Create Custom */}
-                            <button
-                                onClick={() => setShowCustomPaletteModal(true)}
-                                className="flex flex-col items-center justify-center p-2 border border-dashed border-gray-300 rounded-md text-gray-500 hover:bg-gray-50 hover:text-blue-600 transition-colors"
-                            >
-                                <Plus className="w-4 h-4 mb-1" />
-                                <span className="text-xs">Create Custom</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Dark Mode Removed */}
-                </div>
-            </Section>
-
             {/* Canvas Size Section */}
             <Section title="Canvas Size" isOpen={openSections.has('canvas')} onToggle={() => toggleSection('canvas')}>
                 <div className="space-y-3">
@@ -712,7 +686,7 @@ export default function AppearanceTab() {
 
                     <div>
                         <label className="block text-xs font-medium text-[var(--secondary-text)] mb-2">Presets</label>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-4 gap-2">
                             {CANVAS_PRESETS.map((preset) => {
                                 const isActive = settings.width === preset.width && settings.height === preset.height;
                                 return (
@@ -733,6 +707,14 @@ export default function AppearanceTab() {
                                 );
                             })}
                         </div>
+                        <button
+                            type="button"
+                            onClick={handleAutoFitCanvas}
+                            className="mt-2 inline-flex items-center gap-1.5 px-2 py-1.5 text-[11px] rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+                        >
+                            <Maximize2 className="w-3.5 h-3.5" />
+                            Auto-fit to data
+                        </button>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -1054,6 +1036,21 @@ export default function AppearanceTab() {
                             <option value="overlay">Overlay</option>
                         </select>
                     </div>
+
+                    <div className="pt-2 border-t border-gray-100">
+                        <label className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 cursor-pointer select-none">
+                            <span>Focus Mode (Hover Highlight)</span>
+                            <input
+                                type="checkbox"
+                                checked={settings.enableFocusMode}
+                                onChange={(e) => updateSetting('enableFocusMode', e.target.checked)}
+                                className="rounded border-gray-300 text-blue-500"
+                            />
+                        </label>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                            Only affects hover; clicks keep full diagram visible.
+                        </p>
+                    </div>
                 </div>
             </Section>
 
@@ -1128,8 +1125,8 @@ export default function AppearanceTab() {
                 </div>
             </Section>
 
-            {/* Color Palette Section */}
-            <Section title="Color Palette" isOpen={openSections.has('palette')} onToggle={() => toggleSection('palette')}>
+            {/* Brand & Palette Section */}
+            <Section title="Brand & Palette" isOpen={openSections.has('palette')} onToggle={() => toggleSection('palette')}>
                 <div className="space-y-3">
                     {/* Logo Section */}
                     <div className="pb-3 border-b border-gray-100">

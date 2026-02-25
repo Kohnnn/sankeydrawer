@@ -4,6 +4,14 @@ import React, { createContext, useContext, useReducer, useCallback, useEffect } 
 import { DiagramState, DiagramSettings, SankeyData, SankeyNode, SankeyLink, IndependentLabel, NodeCustomization, CustomLayout, defaultSettings, sampleData } from '@/types/sankey';
 import { parseDSL, serializeToDSL } from '@/lib/dsl-parser';
 
+const DIAGRAM_STATE_KEY = 'sankey-diagram-state';
+const RECENT_COLORS_KEY = 'sankey-recent-colors';
+const CUSTOM_PALETTES_KEY = 'sankey-custom-palettes';
+const TEMPLATES_KEY = 'sankey-templates';
+const STORAGE_VERSION_KEY = 'sankey-storage-version';
+const FIRST_VISIT_KEY = 'sankey-first-visit';
+const STORAGE_VERSION = '2026-02-25-sprint-v13';
+
 // Action types
 type DiagramAction =
     | { type: 'SET_DATA'; payload: SankeyData }
@@ -86,7 +94,7 @@ function historyReducer(state: HistoryState, action: DiagramAction): HistoryStat
     }
 
     if (action.type === 'LOAD_STATE') {
-        const staleLabelMatcher = /^(box|verified\s*edit|test\s*texte)/i;
+        const staleLabelMatcher = /^(box|new\s*label|double\s*click\s*to\s*edit|verified\s*edit|test\s*texte)/i;
         const independentLabels = (action.payload.independentLabels || []).filter(
             (label) => !staleLabelMatcher.test((label.text || '').trim()),
         );
@@ -417,7 +425,19 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
 
     // Load from localStorage on mount
     useEffect(() => {
-        const saved = localStorage.getItem('sankey-diagram-state');
+        const storedVersion = localStorage.getItem(STORAGE_VERSION_KEY);
+
+        if (storedVersion !== STORAGE_VERSION) {
+            localStorage.removeItem(DIAGRAM_STATE_KEY);
+            localStorage.removeItem(RECENT_COLORS_KEY);
+            localStorage.removeItem(CUSTOM_PALETTES_KEY);
+            localStorage.removeItem(TEMPLATES_KEY);
+            localStorage.setItem(STORAGE_VERSION_KEY, STORAGE_VERSION);
+            localStorage.setItem(FIRST_VISIT_KEY, 'true');
+            return;
+        }
+
+        const saved = localStorage.getItem(DIAGRAM_STATE_KEY);
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
@@ -425,12 +445,19 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             } catch (e) {
                 console.error('Failed to load saved state:', e);
             }
+            return;
+        }
+
+        const hasVisited = localStorage.getItem(FIRST_VISIT_KEY);
+        if (!hasVisited) {
+            dispatch({ type: 'LOAD_STATE', payload: initialDiagramState });
+            localStorage.setItem(FIRST_VISIT_KEY, 'true');
         }
     }, []);
 
     // Save to localStorage on change
     useEffect(() => {
-        localStorage.setItem('sankey-diagram-state', JSON.stringify(historyState.present));
+        localStorage.setItem(DIAGRAM_STATE_KEY, JSON.stringify(historyState.present));
     }, [historyState.present]);
 
     const undo = useCallback(() => dispatch({ type: 'UNDO' }), []);
@@ -468,10 +495,12 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     }, [historyState.present.selectedLabelId]);
 
     const resetSession = useCallback(() => {
-        localStorage.removeItem('sankey-diagram-state');
-        localStorage.removeItem('sankey-recent-colors');
-        localStorage.removeItem('sankey-custom-palettes');
-        localStorage.removeItem('sankey-templates');
+        localStorage.removeItem(DIAGRAM_STATE_KEY);
+        localStorage.removeItem(RECENT_COLORS_KEY);
+        localStorage.removeItem(CUSTOM_PALETTES_KEY);
+        localStorage.removeItem(TEMPLATES_KEY);
+        localStorage.removeItem(FIRST_VISIT_KEY);
+        localStorage.setItem(STORAGE_VERSION_KEY, STORAGE_VERSION);
         dispatch({ type: 'RESET_SESSION' });
     }, []);
 

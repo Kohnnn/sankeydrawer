@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { Plus, Trash2, Type, AlignLeft, AlignCenter, AlignRight, Square, Box } from 'lucide-react';
 import { useDiagram } from '@/context/DiagramContext';
 import { IndependentLabel, GOOGLE_FONTS } from '@/types/sankey';
@@ -8,7 +7,6 @@ import { IndependentLabel, GOOGLE_FONTS } from '@/types/sankey';
 export default function CustomLabelsTab() {
     const { state, dispatch } = useDiagram();
     const { independentLabels, selectedLabelId, settings } = state;
-    const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
 
     const selectedLabel = selectedLabelId
         ? independentLabels.find(l => l.id === selectedLabelId)
@@ -18,7 +16,7 @@ export default function CustomLabelsTab() {
         const newLabel: IndependentLabel = {
             id: `label_${Date.now()}`,
             type: 'text',
-            text: 'New Label',
+            text: 'Text',
             x: settings.width / 2,
             y: settings.height / 2,
             fontSize: 16,

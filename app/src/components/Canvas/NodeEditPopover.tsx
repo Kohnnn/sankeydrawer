@@ -15,10 +15,41 @@ interface NodeEditPopoverProps {
 export default function NodeEditPopover({ node, position, onClose }: NodeEditPopoverProps) {
     const { dispatch } = useDiagram();
     const popoverRef = useRef<HTMLDivElement>(null);
+    const [safePosition, setSafePosition] = useState(position);
 
     const [labelText, setLabelText] = useState(node.name);
     const [color, setColor] = useState(node.color || '#6b7280');
     const [flowColor, setFlowColor] = useState(node.flowColor || node.color || '#6b7280');
+
+    useEffect(() => {
+        const clampPosition = () => {
+            const element = popoverRef.current;
+            if (!element) {
+                setSafePosition(position);
+                return;
+            }
+
+            const rect = element.getBoundingClientRect();
+            const margin = 12;
+            const x = Math.min(window.innerWidth - rect.width - margin, Math.max(margin, position.x));
+            const y = Math.min(window.innerHeight - rect.height - margin, Math.max(margin, position.y));
+
+            setSafePosition((prev) => {
+                if (Math.abs(prev.x - x) < 0.5 && Math.abs(prev.y - y) < 0.5) {
+                    return prev;
+                }
+
+                return { x, y };
+            });
+        };
+
+        clampPosition();
+        window.addEventListener('resize', clampPosition);
+
+        return () => {
+            window.removeEventListener('resize', clampPosition);
+        };
+    }, [position]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -70,12 +101,12 @@ export default function NodeEditPopover({ node, position, onClose }: NodeEditPop
     return (
         <div
             ref={popoverRef}
-            className="fixed z-50 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden"
+            className="fixed z-50 bg-white rounded-lg shadow-lg border border-slate-200 overflow-hidden"
             style={{
-                left: position.x,
-                top: position.y,
-                width: '280px',
-                maxWidth: '280px',
+                left: safePosition.x,
+                top: safePosition.y,
+                width: '260px',
+                maxWidth: '260px',
             }}
         >
             <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
