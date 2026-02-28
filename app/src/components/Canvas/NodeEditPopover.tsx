@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Type, Palette, Trash2, Check } from 'lucide-react';
+import { X, Type, Palette, Trash2, Check, Plus } from 'lucide-react';
 import { useDiagram } from '@/context/DiagramContext';
 import type { SankeyNode } from '@/types/sankey';
 
@@ -13,13 +13,18 @@ interface NodeEditPopoverProps {
 }
 
 export default function NodeEditPopover({ node, position, onClose }: NodeEditPopoverProps) {
-    const { dispatch } = useDiagram();
+    const { state, dispatch } = useDiagram();
     const popoverRef = useRef<HTMLDivElement>(null);
     const [safePosition, setSafePosition] = useState(position);
+    const existingCustomization = state.nodeCustomizations.find((customization) => customization.nodeId === node.id);
 
     const [labelText, setLabelText] = useState(node.name);
     const [color, setColor] = useState(node.color || '#6b7280');
     const [flowColor, setFlowColor] = useState(node.flowColor || node.color || '#6b7280');
+    const [showSecondLine, setShowSecondLine] = useState(existingCustomization?.showSecondLine ?? true);
+    const [secondLineText, setSecondLineText] = useState(existingCustomization?.secondLineText || '');
+    const [showThirdLine, setShowThirdLine] = useState(existingCustomization?.showThirdLine ?? true);
+    const [thirdLineText, setThirdLineText] = useState(existingCustomization?.thirdLineText || '');
 
     useEffect(() => {
         const clampPosition = () => {
@@ -86,8 +91,21 @@ export default function NodeEditPopover({ node, position, onClose }: NodeEditPop
             },
         });
 
+        dispatch({
+            type: 'UPDATE_NODE_CUSTOMIZATION',
+            payload: {
+                nodeId: node.id,
+                updates: {
+                    showSecondLine,
+                    secondLineText: secondLineText.trim(),
+                    showThirdLine,
+                    thirdLineText: thirdLineText.trim(),
+                },
+            },
+        });
+
         onClose();
-    }, [dispatch, node, labelText, color, flowColor, onClose]);
+    }, [dispatch, node, labelText, color, flowColor, showSecondLine, secondLineText, showThirdLine, thirdLineText, onClose]);
 
     const handleDelete = useCallback(() => {
         if (!window.confirm(`Delete node "${node.name}"? This removes connected flows.`)) {
@@ -97,6 +115,63 @@ export default function NodeEditPopover({ node, position, onClose }: NodeEditPop
         dispatch({ type: 'DELETE_NODE', payload: node.id });
         onClose();
     }, [dispatch, node, onClose]);
+
+    const handleAddFlow = useCallback(() => {
+        const isOutgoing = window.confirm('Add outgoing flow from this node?\nOK: outgoing  |  Cancel: incoming');
+        const otherNodeName = window.prompt(
+            isOutgoing ? 'Target node name' : 'Source node name',
+            isOutgoing ? 'New Target' : 'New Source',
+        );
+
+        if (!otherNodeName) {
+            return;
+        }
+
+        const trimmedName = otherNodeName.trim();
+        if (!trimmedName) {
+            return;
+        }
+
+        const valueInput = window.prompt('Flow value', '100');
+        if (!valueInput) {
+            return;
+        }
+
+        const parsedValue = Number(valueInput.replace(/,/g, ''));
+        if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+            return;
+        }
+
+        const otherNodeId = trimmedName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        if (!otherNodeId || otherNodeId === node.id) {
+            return;
+        }
+
+        const nodeExists = state.data.nodes.some((entry) => entry.id === otherNodeId);
+        if (!nodeExists) {
+            dispatch({
+                type: 'ADD_NODE',
+                payload: {
+                    id: otherNodeId,
+                    name: trimmedName,
+                    category: 'neutral',
+                    color: '#64748b',
+                    flowColor: '#64748b',
+                },
+            });
+        }
+
+        dispatch({
+            type: 'ADD_LINK',
+            payload: {
+                source: isOutgoing ? node.id : otherNodeId,
+                target: isOutgoing ? otherNodeId : node.id,
+                value: parsedValue,
+            },
+        });
+
+        onClose();
+    }, [dispatch, node.id, onClose, state.data.nodes]);
 
     return (
         <div
@@ -187,16 +262,63 @@ export default function NodeEditPopover({ node, position, onClose }: NodeEditPop
                         />
                     </div>
                 </div>
+
+                <div className="space-y-2 rounded-md border border-slate-200 p-2.5">
+                    <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+                        <input
+                            type="checkbox"
+                            checked={showSecondLine}
+                            onChange={(event) => setShowSecondLine(event.target.checked)}
+                            className="rounded border-slate-300"
+                        />
+                        Show 2nd line
+                    </label>
+                    <input
+                        type="text"
+                        value={secondLineText}
+                        onChange={(event) => setSecondLineText(event.target.value)}
+                        className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md"
+                        placeholder="Custom value line"
+                        disabled={!showSecondLine}
+                    />
+
+                    <label className="flex items-center gap-2 text-xs font-medium text-slate-700 pt-1">
+                        <input
+                            type="checkbox"
+                            checked={showThirdLine}
+                            onChange={(event) => setShowThirdLine(event.target.checked)}
+                            className="rounded border-slate-300"
+                        />
+                        Show 3rd line
+                    </label>
+                    <input
+                        type="text"
+                        value={thirdLineText}
+                        onChange={(event) => setThirdLineText(event.target.value)}
+                        className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-md"
+                        placeholder="Custom comparison line"
+                        disabled={!showThirdLine}
+                    />
+                </div>
             </div>
 
             <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 bg-slate-50">
-                <button
-                    onClick={handleDelete}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Remove
-                </button>
+                <div className="flex items-center gap-1.5">
+                    <button
+                        onClick={handleAddFlow}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Flow
+                    </button>
+                    <button
+                        onClick={handleDelete}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Remove
+                    </button>
+                </div>
                 <button
                     onClick={handleSave}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"

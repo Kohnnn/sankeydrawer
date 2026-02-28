@@ -10,7 +10,7 @@ const CUSTOM_PALETTES_KEY = 'sankey-custom-palettes';
 const TEMPLATES_KEY = 'sankey-templates';
 const STORAGE_VERSION_KEY = 'sankey-storage-version';
 const FIRST_VISIT_KEY = 'sankey-first-visit';
-const STORAGE_VERSION = '2026-02-25-sprint-v13';
+const STORAGE_VERSION = '2026-02-25-sprint-v14';
 
 // Action types
 type DiagramAction =
@@ -237,7 +237,8 @@ function diagramReducer(state: DiagramState, action: DiagramAction): DiagramStat
 
         case 'ADD_NODE': {
             const nodes = [...state.data.nodes, action.payload];
-            return { ...state, data: { ...state.data, nodes } };
+            const data = { ...state.data, nodes };
+            return { ...state, data, dslText: serializeToDSL(data) };
         }
 
         case 'ADD_LINK': {
@@ -254,7 +255,8 @@ function diagramReducer(state: DiagramState, action: DiagramAction): DiagramStat
             }
 
             const links = [...state.data.links, action.payload];
-            return { ...state, data: { ...state.data, nodes, links } };
+            const data = { ...state.data, nodes, links };
+            return { ...state, data, dslText: serializeToDSL(data) };
         }
 
         case 'DELETE_NODE': {
@@ -275,6 +277,7 @@ function diagramReducer(state: DiagramState, action: DiagramAction): DiagramStat
             return {
                 ...state,
                 data: { ...state.data, nodes, links },
+                dslText: serializeToDSL({ ...state.data, nodes, links }),
                 nodeCustomizations,
                 customLayout,
                 selectedNodeId: state.selectedNodeId === nodeId ? null : state.selectedNodeId,
@@ -283,7 +286,8 @@ function diagramReducer(state: DiagramState, action: DiagramAction): DiagramStat
 
         case 'DELETE_LINK': {
             const links = state.data.links.filter((_, i) => i !== action.payload);
-            return { ...state, data: { ...state.data, links } };
+            const data = { ...state.data, links };
+            return { ...state, data, dslText: serializeToDSL(data) };
         }
 
         case 'SET_NODE_CUSTOMIZATION': {

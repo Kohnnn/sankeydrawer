@@ -30,15 +30,17 @@ const THEME_PRESETS = {
             width: 960,
             height: 600,
             padding: { top: 50, right: 50, bottom: 50, left: 50 },
-            diagramTitle: '',
+            diagramTitle: 'Cash Flow Template',
+            canvasBackground: '#ffffff',
             nodeWidth: 30,
             nodePadding: 30,
+            nodeAlignment: 'justify' as const,
             nodeOpacity: 1,
             linkCurvature: 0.45,
             linkOpacity: 0.45,
-            linkGradient: false,
+            linkGradient: true,
             linkBlendMode: 'multiply' as const,
-            useFinancialTheme: true,
+            useFinancialTheme: false,
             labelPosition: 'outside' as const,
             labelFontSize: 11,
             labelBold: true,
@@ -685,6 +687,24 @@ export default function AppearanceTab() {
                     </div>
 
                     <div>
+                        <label className="block text-xs font-medium text-[var(--secondary-text)] mb-1">Canvas Background</label>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="color"
+                                value={settings.canvasBackground || '#ffffff'}
+                                onChange={(e) => updateSetting('canvasBackground', e.target.value)}
+                                className="h-8 w-10 rounded border border-[var(--border)]"
+                            />
+                            <input
+                                type="text"
+                                value={settings.canvasBackground || '#ffffff'}
+                                onChange={(e) => updateSetting('canvasBackground', e.target.value)}
+                                className="flex-1 px-2 py-1 text-xs font-mono border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
                         <label className="block text-xs font-medium text-[var(--secondary-text)] mb-2">Presets</label>
                         <div className="grid grid-cols-4 gap-2">
                             {CANVAS_PRESETS.map((preset) => {
@@ -899,6 +919,20 @@ export default function AppearanceTab() {
                                 className="w-full"
                             />
                         </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-medium text-[var(--secondary-text)] mb-1">Alignment</label>
+                        <select
+                            value={settings.nodeAlignment || 'justify'}
+                            onChange={(e) => updateSetting('nodeAlignment', e.target.value as any)}
+                            className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--card-bg)] text-[var(--primary-text)]"
+                        >
+                            <option value="justify">Justify</option>
+                            <option value="left">Left</option>
+                            <option value="right">Right</option>
+                            <option value="center">Center</option>
+                        </select>
                     </div>
 
                     <div>

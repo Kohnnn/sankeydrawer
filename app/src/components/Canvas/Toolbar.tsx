@@ -19,6 +19,48 @@ export default function Toolbar() {
         dispatch({ type: 'UPDATE_SETTINGS', payload: { width, height } });
     };
 
+    const handleBackdropColor = () => {
+        const colorInput = window.prompt('Canvas background color (hex)', state.settings.canvasBackground || '#ffffff');
+        if (!colorInput) return;
+
+        const normalized = colorInput.trim();
+        if (!/^#[0-9A-Fa-f]{6}$/.test(normalized)) {
+            return;
+        }
+
+        dispatch({ type: 'UPDATE_SETTINGS', payload: { canvasBackground: normalized } });
+    };
+
+    const handleNodeWidthPrompt = () => {
+        const widthInput = window.prompt('Node width (px)', String(state.settings.nodeWidth));
+        if (!widthInput) return;
+
+        const value = Number(widthInput);
+        if (!Number.isFinite(value)) return;
+        dispatch({ type: 'UPDATE_SETTINGS', payload: { nodeWidth: Math.max(6, Math.min(120, Math.round(value))) } });
+    };
+
+    const handleNodeSpacingPrompt = () => {
+        const spacingInput = window.prompt('Node spacing (px)', String(state.settings.nodePadding));
+        if (!spacingInput) return;
+
+        const value = Number(spacingInput);
+        if (!Number.isFinite(value)) return;
+        dispatch({ type: 'UPDATE_SETTINGS', payload: { nodePadding: Math.max(4, Math.min(80, Math.round(value))) } });
+    };
+
+    const handleValuePrefixPrompt = () => {
+        const nextPrefix = window.prompt('Value prefix', state.settings.valuePrefix);
+        if (nextPrefix === null) return;
+        dispatch({ type: 'UPDATE_SETTINGS', payload: { valuePrefix: nextPrefix } });
+    };
+
+    const handleValueSuffixPrompt = () => {
+        const nextSuffix = window.prompt('Value suffix', state.settings.valueSuffix);
+        if (nextSuffix === null) return;
+        dispatch({ type: 'UPDATE_SETTINGS', payload: { valueSuffix: nextSuffix } });
+    };
+
     const handleCustomCanvasSize = () => {
         const widthInput = window.prompt('Canvas width (px)', String(state.settings.width));
         if (!widthInput) return;
@@ -103,10 +145,17 @@ export default function Toolbar() {
         { label: 'Add Text', icon: Type, onClick: () => setTool('addLabel') },
         { label: 'Add Image', icon: Image, onClick: () => setTool('addImage') },
         { label: 'Annotate', icon: SquareDashed, onClick: () => setTool('annotate') },
+        { label: 'Backdrop Color...', onClick: handleBackdropColor },
         { label: 'Small (640x400)', onClick: () => applyCanvasSize(640, 400) },
         { label: 'Medium (960x600)', onClick: () => applyCanvasSize(960, 600) },
         { label: 'Large (1200x800)', onClick: () => applyCanvasSize(1200, 800) },
         { label: 'HD (1600x900)', onClick: () => applyCanvasSize(1600, 900) },
+        { label: 'Node Width...', onClick: handleNodeWidthPrompt },
+        { label: 'Node Spacing...', onClick: handleNodeSpacingPrompt },
+        { label: 'Align Justify', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { nodeAlignment: 'justify' } }) },
+        { label: 'Align Left', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { nodeAlignment: 'left' } }) },
+        { label: 'Align Right', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { nodeAlignment: 'right' } }) },
+        { label: 'Align Center', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { nodeAlignment: 'center' } }) },
         { label: 'Custom Size...', onClick: handleCustomCanvasSize },
         { label: 'Reset Node Positions', icon: RotateCw, onClick: resetNodePositions },
     ];
@@ -134,6 +183,13 @@ export default function Toolbar() {
         { label: 'After Labels', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { labelPosition: 'after' } }) },
         { label: 'Inside Labels', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { labelPosition: 'inside' } }) },
         { label: 'Above Labels', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { labelPosition: 'above' } }) },
+        { label: 'Decimals: 0', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { valueDecimals: 0 } }) },
+        { label: 'Decimals: 1', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { valueDecimals: 1 } }) },
+        { label: 'Decimals: 2', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { valueDecimals: 2 } }) },
+        { label: 'Value Prefix...', onClick: handleValuePrefixPrompt },
+        { label: 'Value Suffix...', onClick: handleValueSuffixPrompt },
+        { label: 'Comparison: On', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { showComparisonLine: true } }) },
+        { label: 'Comparison: Off', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { showComparisonLine: false } }) },
         { label: 'Hide Values', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { valueMode: 'hidden' } }) },
         { label: 'Show Values', onClick: () => dispatch({ type: 'UPDATE_SETTINGS', payload: { valueMode: 'formatted' } }) },
         { label: 'Reset Label Positions', icon: RotateCw, onClick: resetLabelPositions },

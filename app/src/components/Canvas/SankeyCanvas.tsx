@@ -2,9 +2,9 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import * as d3 from 'd3';
-import { sankey } from 'd3-sankey';
+import { sankey, sankeyCenter, sankeyJustify, sankeyLeft, sankeyRight } from 'd3-sankey';
 import { useDiagram } from '@/context/DiagramContext';
 import { useStudio } from '@/context/StudioContext';
 import { SankeyNode, NodeCustomization } from '@/types/sankey';
@@ -43,6 +43,54 @@ export default function SankeyCanvas() {
     const { data, settings, selectedNodeId, nodeCustomizations } = state;
     const [popover, setPopover] = useState<PopoverState | null>(null);
     const [statusText, setStatusText] = useState('Click on any element to edit it');
+
+    const balanceSummary = useMemo(() => {
+        const nodeBalanceMap = new Map<string, { incoming: number; outgoing: number }>();
+
+        data.nodes.forEach((node) => {
+            nodeBalanceMap.set(node.id, { incoming: 0, outgoing: 0 });
+        });
+
+        const resolveNodeId = (ref: string | number) => {
+            if (typeof ref === 'string') {
+                return ref;
+            }
+
+            return data.nodes[ref]?.id;
+        };
+
+        data.links.forEach((link) => {
+            const sourceId = resolveNodeId(link.source);
+            const targetId = resolveNodeId(link.target);
+            if (!sourceId || !targetId) {
+                return;
+            }
+
+            const sourceBalance = nodeBalanceMap.get(sourceId);
+            const targetBalance = nodeBalanceMap.get(targetId);
+
+            if (sourceBalance) {
+                sourceBalance.outgoing += Number(link.value || 0);
+            }
+
+            if (targetBalance) {
+                targetBalance.incoming += Number(link.value || 0);
+            }
+        });
+
+        let imbalancedCount = 0;
+
+        nodeBalanceMap.forEach((balance) => {
+            if (balance.incoming > 0 && balance.outgoing > 0 && Math.abs(balance.incoming - balance.outgoing) > 0.1) {
+                imbalancedCount += 1;
+            }
+        });
+
+        return {
+            allBalanced: imbalancedCount === 0,
+            imbalancedCount,
+        };
+    }, [data.links, data.nodes]);
 
     // In-place editing state
     const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -145,7 +193,7 @@ export default function SankeyCanvas() {
             .attr('y', 0.5)
             .attr('width', Math.max(0, width - 1))
             .attr('height', Math.max(0, height - 1))
-            .attr('fill', '#ffffff')
+            .attr('fill', settings.canvasBackground || '#ffffff')
             .attr('stroke', '#e5e7eb')
             .attr('stroke-width', 1)
             .style('pointer-events', 'none');
@@ -229,9 +277,19 @@ export default function SankeyCanvas() {
             [width - padding.right - horizontalBreathingRoom, height - padding.bottom - verticalBreathingRoom],
         ];
 
+        const alignStrategy =
+            settings.nodeAlignment === 'left'
+                ? sankeyLeft
+                : settings.nodeAlignment === 'right'
+                    ? sankeyRight
+                    : settings.nodeAlignment === 'center'
+                        ? sankeyCenter
+                        : sankeyJustify;
+
         const sankeyGenerator = sankey<any, any>()
             .nodeId((d: any) => d.id)
             .nodeWidth(settings.nodeWidth)
+            .nodeAlign(alignStrategy)
             .extent(extent);
 
         // Filter & Clone Data
@@ -610,7 +668,7 @@ export default function SankeyCanvas() {
         const getLabelCoordinates = (node: any, custom?: NodeCustomization) => {
             const nodeWidth = node.x1 - node.x0;
             const placement = resolvePlacement(node, custom);
-            const gap = 8;
+            const gap = Math.max(12, settings.nodeWidth * 0.42);
 
             let x = node.x0 + nodeWidth / 2;
             let y = (node.y0 + node.y1) / 2;
@@ -766,8 +824,14 @@ export default function SankeyCanvas() {
             let y = getLabelCoordinates(node, custom).y;
 
             const nameText = custom?.labelText || node.name;
-            const valueText = formatValue(node.value);
-            const comparisonText = getNodeComparisonText(node);
+            const defaultValueText = formatValue(node.value);
+            const valueText = custom?.showSecondLine === false
+                ? ''
+                : (custom?.secondLineText?.trim() || defaultValueText);
+            const defaultComparisonText = getNodeComparisonText(node);
+            const comparisonText = custom?.showThirdLine === false
+                ? ''
+                : (custom?.thirdLineText?.trim() || defaultComparisonText);
             const nameSize = custom?.labelFontSize ?? settings.labelFontSize ?? DEFAULT_LABEL_NAME_SIZE;
             const valueSize = Math.max(DEFAULT_LABEL_VALUE_SIZE, Math.round(nameSize - 1));
             const comparisonSize = 11;
@@ -2100,7 +2164,11 @@ export default function SankeyCanvas() {
     ]);
 
     return (
-        <div ref={containerRef} className="w-full h-full bg-white border border-slate-200 overflow-hidden relative">
+        <div
+            ref={containerRef}
+            className="w-full h-full border border-slate-200 overflow-hidden relative"
+            style={{ backgroundColor: settings.canvasBackground || '#ffffff' }}
+        >
             <svg
 
                 ref={svgRef}
@@ -2110,11 +2178,21 @@ export default function SankeyCanvas() {
                 className="w-full h-full main-canvas"
                 style={{ minHeight: '600px' }}
             />
-            <div className="absolute bottom-2 left-3 pointer-events-none select-none text-[11px] text-slate-400 bg-white/70 px-2 py-0.5 rounded">
+            <div className="absolute bottom-8 left-3 pointer-events-none select-none text-[11px] text-slate-400 bg-white/70 px-2 py-0.5 rounded">
                 {statusText}
             </div>
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none select-none text-[10px] text-slate-300">
+            <div className="absolute bottom-8 right-3 pointer-events-none select-none text-[10px] text-slate-400 bg-white/70 px-2 py-0.5 rounded uppercase tracking-wide">
+                Q {Math.round((studioState.viewportTransform?.scale || 1) * 100)}%
+            </div>
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 pointer-events-none select-none text-[10px] text-slate-300">
                 created with SankeyCapCap Studio
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 border-t border-slate-200 bg-white/95 px-3 py-1.5 pointer-events-none select-none">
+                <span className={`text-[11px] font-medium ${balanceSummary.allBalanced ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {balanceSummary.allBalanced
+                        ? 'All nodes are balanced'
+                        : `${balanceSummary.imbalancedCount} nodes are imbalanced`}
+                </span>
             </div>
             {/* Top Toolbar */}
             {/* Top Toolbar - REMOVED (Handled by Toolbar component) */}
